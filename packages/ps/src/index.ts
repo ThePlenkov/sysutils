@@ -70,6 +70,14 @@ function nodeApiDotNetAvailable(): boolean {
 export function getBinaryPath(
   backend: SupportedBackend = "dotnet",
 ): string | undefined {
+  // Test seam: allow tests to point nodeapi at a temporary copy so they can
+  // simulate missing/corrupt assemblies without mutating the real build artifact.
+  if (backend === "dotnet-nodeapi" && process.env.SYSUTILS_PS_TEST_NODEAPI_PATH) {
+    const override = process.env.SYSUTILS_PS_TEST_NODEAPI_PATH;
+    if (existsSync(override) && nodeApiDotNetAvailable()) return override;
+    return undefined;
+  }
+
   const binaries = readBinariesMap();
   if (!binaries) return undefined;
 

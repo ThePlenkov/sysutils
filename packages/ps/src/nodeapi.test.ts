@@ -1,5 +1,7 @@
 import assert from "node:assert";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { getBinaryPath, listProcesses } from "./index.js";
 
@@ -12,38 +14,44 @@ test("dotnet-nodeapi selection, fallback, and explicit execution", async (t) => 
     return;
   }
 
-  const nodeapiPath = getBinaryPath("dotnet-nodeapi");
-  if (!nodeapiPath) {
+  const realNodeapiPath = getBinaryPath("dotnet-nodeapi");
+  if (!realNodeapiPath) {
     t.skip("dotnet-nodeapi assembly not built");
     return;
   }
 
-  const dotnetPath = getBinaryPath("dotnet");
-  if (!dotnetPath) {
+  if (!getBinaryPath("dotnet")) {
     t.skip("dotnet CLI binary not built");
     return;
   }
 
-  const backup = `${nodeapiPath}.tmp`;
+  const testDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "sysutils-ps-nodeapi-test-"),
+  );
+  const testBinaryPath = path.join(testDir, "ps-nodeapi.dll");
+  fs.copyFileSync(realNodeapiPath, testBinaryPath);
+  process.env.SYSUTILS_PS_TEST_NODEAPI_PATH = testBinaryPath;
 
-  function restoreAssembly() {
-    if (!nodeapiPath) return;
+  function cleanup() {
+    delete process.env.SYSUTILS_PS_TEST_NODEAPI_PATH;
     try {
-      if (fs.existsSync(backup) && !fs.existsSync(nodeapiPath)) {
-        fs.renameSync(backup, nodeapiPath);
-      } else if (fs.existsSync(nodeapiPath) && fs.statSync(nodeapiPath).size < 1024) {
-        // A dummy/placeholder file was left in place; replace it with the backup.
-        fs.rmSync(nodeapiPath);
-        fs.renameSync(backup, nodeapiPath);
-      }
+      fs.rmSync(testDir, { recursive: true, force: true });
     } catch {
       // best effort
     }
   }
 
+  function setTestBinary(content?: Buffer) {
+    if (content === undefined) {
+      if (fs.existsSync(testBinaryPath)) fs.rmSync(testBinaryPath);
+    } else {
+      fs.writeFileSync(testBinaryPath, content);
+    }
+  }
+
   try {
     // 1. Env-selected nodeapi with a missing assembly falls back to the dotnet CLI.
-    fs.renameSync(nodeapiPath, backup);
+    setTestBinary(undefined);
     process.env.SYSUTILS_PS_BACKEND = "dotnet-nodeapi";
     try {
       const missing = await listProcesses({ fields: ["pid", "name"] });
@@ -55,12 +63,11 @@ test("dotnet-nodeapi selection, fallback, and explicit execution", async (t) => 
       );
     } finally {
       delete process.env.SYSUTILS_PS_BACKEND;
-      restoreAssembly();
+      setTestBinary(fs.readFileSync(realNodeapiPath));
     }
 
     // 2. Env-selected nodeapi with a corrupt/invalid assembly falls back to the dotnet CLI.
-    fs.renameSync(nodeapiPath, backup);
-    fs.writeFileSync(nodeapiPath, "not a valid .NET assembly");
+    setTestBinary(Buffer.from("not a valid .NET assembly"));
     process.env.SYSUTILS_PS_BACKEND = "dotnet-nodeapi";
     try {
       const corrupt = await listProcesses({ fields: ["pid", "name"] });
@@ -72,7 +79,7 @@ test("dotnet-nodeapi selection, fallback, and explicit execution", async (t) => 
       );
     } finally {
       delete process.env.SYSUTILS_PS_BACKEND;
-      restoreAssembly();
+      setTestBinary(fs.readFileSync(realNodeapiPath));
     }
 
     // 3. Explicit dotnet-nodeapi backend executes successfully when the assembly is valid.
@@ -88,8 +95,10 @@ test("dotnet-nodeapi selection, fallback, and explicit execution", async (t) => 
     );
   } catch (err) {
     console.error(err);
+    cleanup();
     process.exit(1);
   }
 
+  cleanup();
   process.exit(0);
 });
