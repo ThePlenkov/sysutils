@@ -95,10 +95,14 @@ fn join_cmd(argv: &[OsString]) -> Option<String> {
 }
 
 fn refresh_kind() -> ProcessRefreshKind {
-    ProcessRefreshKind::nothing()
+    ProcessRefreshKind::everything()
+        .without_user()
+        .without_disk_usage()
+        .without_exe()
         .with_cmd(UpdateKind::OnlyIfNotSet)
-        .with_memory(true)
-        .with_cpu(true)
+        .with_environ(UpdateKind::Never)
+        .with_root(UpdateKind::Never)
+        .with_cwd(UpdateKind::Never)
 }
 
 fn run() -> Result<(), String> {
