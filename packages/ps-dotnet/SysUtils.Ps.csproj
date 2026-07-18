@@ -8,7 +8,7 @@
     <RootNamespace>SysUtils.Ps</RootNamespace>
     <AssemblyName>ps</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <DefaultItemExcludes>$(DefaultItemExcludes);tests\**\*</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);tests\**\*;tests/**/*</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
