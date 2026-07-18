@@ -9,30 +9,29 @@ JavaScript API.
 
 ## Packages
 
-| package | description |
-|---|---|
-| [`@sysutils/ps`](./packages/ps) | Cross-platform process listing as a Node.js `Readable` stream. |
-| [`@sysutils/ps-rust`](./packages/ps-rust) | Native Rust backend for `@sysutils/ps`. |
-| [`@sysutils/ps-dotnet`](./packages/ps-dotnet) | Native .NET backend for `@sysutils/ps`. |
+| package                                                       | description                                                       |
+| ------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [`@sysutils/ps`](./packages/ps)                               | Cross-platform process listing as a Node.js `Readable` stream.    |
+| [`@sysutils/ps-dotnet`](./packages/ps-dotnet)                 | Native .NET AOT CLI backend for `@sysutils/ps`.                   |
+| [`@sysutils/ps-dotnet-nodeapi`](./packages/ps-dotnet-nodeapi) | In-process .NET backend for `@sysutils/ps` via `node-api-dotnet`. |
 
 ## Layout
 
 ```
 packages/
-  ps/          # Node.js entrypoint (@sysutils/ps)
-  ps-rust/     # Rust crate + npm binary package
-  ps-dotnet/   # .NET project + npm binary package
+  ps/                   # Node.js entrypoint (@sysutils/ps)
+  ps-dotnet/            # .NET AOT CLI binary package
+  ps-dotnet-nodeapi/    # .NET assembly loaded by node-api-dotnet
 .github/
-  workflows/   # CI builds for native binaries
-.agents/       # Agent rules and skills
-docs/adr/      # Architecture decision records
+  workflows/            # CI builds for native binaries
+.agents/               # Agent rules and skills
+docs/adr/              # Architecture decision records
 ```
 
 ## Tooling
 
 - Node.js `>=24` with `npm` workspaces.
-- Rust toolchain (for `ps-rust`).
-- .NET 8 SDK (for `ps-dotnet`).
+- .NET 8 SDK (for `ps-dotnet` and `ps-dotnet-nodeapi`).
 
 ## Read-first
 

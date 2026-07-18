@@ -18,9 +18,9 @@
     "typecheck": "tsc --noEmit"
   },
   "optionalDependencies": {
-    "@sysutils/ps-rust": "^0.1.0",
     "@sysutils/ps-dotnet": "^0.1.0",
-    "@sysutils/ps-dotnet-nodeapi": "^0.1.0"
+    "@sysutils/ps-dotnet-nodeapi": "^0.1.0",
+    "node-api-dotnet": "^0.9.21"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

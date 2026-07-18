@@ -6,8 +6,8 @@
 ## 1. Repository purpose
 
 `@sysutils` is a cross-platform, stream-first system utilities monorepo for
-Node.js. Each utility ships one or more native backends (Rust, .NET, etc.) and
-exposes a single async Node.js API that returns native streams.
+Node.js. Each utility ships one or more native backends and exposes a single
+async Node.js API that returns native streams.
 
 This repository is opinionated:
 
@@ -18,8 +18,8 @@ This repository is opinionated:
 - **Cross-platform**: every package must build and pass tests on Windows,
   macOS, and Linux for `x64` and `arm64`.
 - **Monorepo**: source and distribution live in `packages/`. Native source is
-  inside its npm package (`packages/ps-rust/Cargo.toml`,
-  `packages/ps-dotnet/*.csproj`).
+  inside its npm package (`packages/ps-dotnet/*.csproj`,
+  `packages/ps-dotnet-nodeapi/*.csproj`).
 
 ## 2. Read-first order
 
@@ -47,8 +47,8 @@ Before making changes, read in this order:
 
 1. Open an issue describing the utility, its native backends, and the public
    streaming API.
-2. Add `packages/<utility>/`, `packages/<utility>-rust/`, and
-   `packages/<utility>-dotnet/` only if needed.
+2. Add `packages/<utility>/`, `packages/<utility>-dotnet/`, and
+   `packages/<utility>-dotnet-nodeapi/` only if needed.
 3. Update root `README.md` and this file if the rule changes.
 4. Add CI matrix entries in `.github/workflows/ci.yml`.
 

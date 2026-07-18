@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace SysUtils.Ps;
 
@@ -13,17 +14,23 @@ internal enum ProcessField
     Command = 8,
     Memory = 16,
     Cpu = 32,
-    All = Pid | Ppid | Name | Command | Memory | Cpu,
+    Uid = 64,
+    Path = 128,
+    StartTime = 256,
+    All = Pid | Ppid | Name | Command | Memory | Cpu | Uid | Path | StartTime,
 }
 
 internal struct ProcessInfo
 {
     public int Pid;
     public int Ppid;
+    public int Uid;          // -1 means null
     public string? Name;
-    public string? Command;
-    public long Memory;  // -1 means null
-    public double Cpu;   // -1 means null
+    public string? Cmd;
+    public string? Path;
+    public string? StartTime;  // ISO 8601 or null
+    public double Memory;    // percent of total memory, -1 means null
+    public double Cpu;       // percent of one CPU, -1 means null
 }
 
 internal readonly struct Options
@@ -56,9 +63,12 @@ internal readonly struct Options
             if (trimmed.SequenceEqual("pid".AsSpan())) result |= ProcessField.Pid;
             else if (trimmed.SequenceEqual("ppid".AsSpan())) result |= ProcessField.Ppid;
             else if (trimmed.SequenceEqual("name".AsSpan())) result |= ProcessField.Name;
-            else if (trimmed.SequenceEqual("command".AsSpan())) result |= ProcessField.Command;
+            else if (trimmed.SequenceEqual("cmd".AsSpan()) || trimmed.SequenceEqual("command".AsSpan())) result |= ProcessField.Command;
             else if (trimmed.SequenceEqual("memory".AsSpan())) result |= ProcessField.Memory;
             else if (trimmed.SequenceEqual("cpu".AsSpan())) result |= ProcessField.Cpu;
+            else if (trimmed.SequenceEqual("uid".AsSpan())) result |= ProcessField.Uid;
+            else if (trimmed.SequenceEqual("path".AsSpan())) result |= ProcessField.Path;
+            else if (trimmed.SequenceEqual("startTime".AsSpan())) result |= ProcessField.StartTime;
             span = idx < 0 ? ReadOnlySpan<char>.Empty : span.Slice(idx + 1);
         }
         return result == 0 ? ProcessField.All : result;
@@ -114,6 +124,11 @@ internal static class JsonWriter
             WriteKey(w, "ppid", ref first);
             w.Write(p.Ppid);
         }
+        if ((fields & ProcessField.Uid) != 0)
+        {
+            WriteKey(w, "uid", ref first);
+            if (p.Uid >= 0) w.Write(p.Uid); else w.Write("null");
+        }
         if ((fields & ProcessField.Name) != 0)
         {
             WriteKey(w, "name", ref first);
@@ -121,13 +136,23 @@ internal static class JsonWriter
         }
         if ((fields & ProcessField.Command) != 0)
         {
-            WriteKey(w, "command", ref first);
-            WriteString(w, p.Command);
+            WriteKey(w, "cmd", ref first);
+            WriteString(w, p.Cmd);
+        }
+        if ((fields & ProcessField.Path) != 0)
+        {
+            WriteKey(w, "path", ref first);
+            WriteString(w, p.Path);
+        }
+        if ((fields & ProcessField.StartTime) != 0)
+        {
+            WriteKey(w, "startTime", ref first);
+            WriteString(w, p.StartTime);
         }
         if ((fields & ProcessField.Memory) != 0)
         {
             WriteKey(w, "memory", ref first);
-            if (p.Memory >= 0) w.Write(p.Memory); else w.Write("null");
+            if (p.Memory >= 0) w.Write(p.Memory.ToString(System.Globalization.CultureInfo.InvariantCulture)); else w.Write("null");
         }
         if ((fields & ProcessField.Cpu) != 0)
         {
@@ -228,7 +253,18 @@ internal static class WindowsReader
 
                 if (pid != 0)
                 {
-                    var info = new ProcessInfo { Pid = pid, Ppid = ppid, Name = name, Command = null, Memory = -1, Cpu = -1 };
+                    var info = new ProcessInfo
+                    {
+                        Pid = pid,
+                        Ppid = ppid,
+                        Uid = -1,
+                        Name = name,
+                        Cmd = null,
+                        Path = null,
+                        StartTime = null,
+                        Memory = -1,
+                        Cpu = -1,
+                    };
                     JsonWriter.Write(writer, info, fields);
                 }
 
@@ -245,122 +281,327 @@ internal static class WindowsReader
 
 internal static class LinuxReader
 {
+    private const int _SC_CLK_TCK = 2;
+    private const int PATH_MAX = 4096;
+
+    [DllImport("libc", SetLastError = true)]
+    private static extern long sysconf(int name);
+
+    [DllImport("libc", SetLastError = true)]
+    private static extern long readlink(string pathname, byte[] buf, long bufsize);
+
     public static void Write(TextWriter writer, ProcessField fields)
     {
-        var pageSize = Environment.SystemPageSize;
+        var pageSize = (double)Environment.SystemPageSize;
+        var ticks = (double)GetClockTicks();
+        var uptime = ParseUptime(File.ReadAllBytes("/proc/uptime"));
+        var bootTime = ParseBtime(File.ReadAllBytes("/proc/stat"));
+        var totalMem = ParseMemTotal(File.ReadAllBytes("/proc/meminfo"));
+
         var dirs = Directory.GetDirectories("/proc");
         foreach (var dir in dirs)
         {
             var name = Path.GetFileName(dir);
             if (!int.TryParse(name, out var pid)) continue;
-            try { WriteOne(writer, pid, dir, pageSize, fields); }
+            try { WriteOne(writer, pid, dir, pageSize, ticks, uptime, bootTime, totalMem, fields); }
             catch { /* skip processes that disappear */ }
         }
     }
 
-    private static void WriteOne(TextWriter writer, int pid, string dir, long pageSize, ProcessField fields)
+    private static long GetClockTicks()
     {
-        var wantsPpid = (fields & ProcessField.Ppid) != 0 || fields == 0;
+        try
+        {
+            var t = sysconf(_SC_CLK_TCK);
+            if (t > 0) return t;
+        }
+        catch { }
+        return 100;
+    }
+
+    private static double ParseUptime(ReadOnlySpan<byte> data)
+    {
+        var i = 0;
+        return TryParseDouble(data, ref i, out var value) ? value : 0;
+    }
+
+    private static long ParseBtime(ReadOnlySpan<byte> data)
+    {
+        var idx = data.IndexOf("btime "u8);
+        if (idx >= 0)
+        {
+            var i = idx + "btime "u8.Length;
+            if (TryParseLong(data, ref i, out var value)) return value;
+        }
+        return 0;
+    }
+
+    private static double ParseMemTotal(ReadOnlySpan<byte> data)
+    {
+        var idx = data.IndexOf("MemTotal:"u8);
+        if (idx >= 0)
+        {
+            var i = idx + "MemTotal:"u8.Length;
+            while (i < data.Length && data[i] == ' ') i++;
+            if (TryParseLong(data, ref i, out var kb)) return kb * 1024.0;
+        }
+        return 1;
+    }
+
+    private static void WriteOne(TextWriter writer, int pid, string dir, double pageSize, double ticks, double uptime, long bootTime, double totalMem, ProcessField fields)
+    {
         var wantsName = (fields & ProcessField.Name) != 0 || fields == 0;
-        var wantsCommand = (fields & ProcessField.Command) != 0 || fields == 0;
+        var wantsCmd = (fields & ProcessField.Command) != 0 || fields == 0;
+        var wantsPath = (fields & ProcessField.Path) != 0 || fields == 0;
+        var wantsUid = (fields & ProcessField.Uid) != 0 || fields == 0;
+        var wantsPpid = (fields & ProcessField.Ppid) != 0 || fields == 0;
         var wantsMemory = (fields & ProcessField.Memory) != 0 || fields == 0;
+        var wantsCpu = (fields & ProcessField.Cpu) != 0 || fields == 0;
+        var wantsStartTime = (fields & ProcessField.StartTime) != 0 || fields == 0;
 
-        var ppid = 0;
+        string? comm = null;
+        if (wantsName || wantsCmd)
+        {
+            comm = DecodeUtf8Trim(File.ReadAllBytes(Path.Combine(dir, "comm")));
+        }
+
+        var path = string.Empty;
+        if (wantsName || wantsPath)
+        {
+            var rawPath = ReadExeLink(Path.Combine(dir, "exe"));
+            if (!string.IsNullOrEmpty(rawPath))
+            {
+                if (rawPath.EndsWith(" (deleted)"))
+                    rawPath = rawPath[..^" (deleted)".Length];
+                path = rawPath;
+            }
+        }
+
+        var cmd = string.Empty;
+        if (wantsCmd)
+        {
+            cmd = DecodeCmdline(File.ReadAllBytes(Path.Combine(dir, "cmdline"))) ?? string.Empty;
+        }
+
+        int uid = -1;
+        if (wantsUid)
+        {
+            uid = ParseStatusUid(File.ReadAllBytes(Path.Combine(dir, "status")));
+        }
+
+        StatInfo stat = default;
+        var statOk = false;
+        if (wantsPpid || wantsMemory || wantsCpu || wantsStartTime)
+        {
+            statOk = TryParseStat(File.ReadAllBytes(Path.Combine(dir, "stat")), out stat);
+        }
+
         string? name = null;
-        string? command = null;
-        var memory = -1L;
-
-        if (wantsPpid)
+        if (wantsName)
         {
-            var stat = File.ReadAllBytes(Path.Combine(dir, "stat"));
-            ppid = ParsePpid(stat);
+            if (!string.IsNullOrEmpty(path))
+                name = Path.GetFileName(path);
+            if (string.IsNullOrEmpty(name))
+                name = comm;
         }
 
-        if (wantsName || wantsCommand)
+        double memory = -1;
+        if (statOk && wantsMemory)
         {
-            var comm = File.ReadAllBytes(Path.Combine(dir, "comm"));
-            name = DecodeUtf8Trim(comm);
+            memory = stat.Rss * pageSize / totalMem * 100.0;
         }
 
-        if (wantsCommand)
+        double cpu = -1;
+        if (statOk && wantsCpu)
         {
-            var cmdline = File.ReadAllBytes(Path.Combine(dir, "cmdline"));
-            command = DecodeCmdline(cmdline);
+            var processAge = uptime - stat.StartTime / ticks;
+            if (processAge > 0)
+            {
+                var totalTime = (stat.Utime + stat.Stime) / ticks;
+                cpu = totalTime / processAge * 100.0;
+            }
         }
 
-        if (wantsMemory)
+        string? startTime = null;
+        if (statOk && wantsStartTime)
         {
-            var statm = File.ReadAllBytes(Path.Combine(dir, "statm"));
-            var resident = ParseStatmSecond(statm);
-            if (resident >= 0) memory = resident * pageSize;
+            var epoch = bootTime + stat.StartTime / ticks;
+            startTime = DateTimeOffset.FromUnixTimeSeconds((long)epoch).ToString("o");
         }
 
         var info = new ProcessInfo
         {
             Pid = pid,
-            Ppid = ppid,
-            Name = wantsName ? name : null,
-            Command = command,
+            Ppid = statOk ? stat.Ppid : 0,
+            Uid = uid,
+            Name = name,
+            Cmd = cmd,
+            Path = path,
+            StartTime = startTime,
             Memory = memory,
-            Cpu = -1,
+            Cpu = cpu,
         };
         JsonWriter.Write(writer, info, fields);
     }
 
-    private static int ParsePpid(ReadOnlySpan<byte> data)
+    private static string? ReadExeLink(string pathname)
     {
-        var rpar = -1;
-        for (var j = data.Length - 1; j >= 0; j--)
+        var buf = new byte[PATH_MAX];
+        try
         {
-            if (data[j] == (byte)')') { rpar = j; break; }
+            var len = readlink(pathname, buf, buf.Length);
+            if (len > 0)
+            {
+                var s = Encoding.UTF8.GetString(buf, 0, (int)len);
+                return s;
+            }
         }
-        if (rpar < 0 || rpar + 4 >= data.Length) return 0;
+        catch { }
+        return null;
+    }
+
+    private static int ParseStatusUid(ReadOnlySpan<byte> data)
+    {
+        var idx = data.IndexOf("Uid:"u8);
+        if (idx < 0) return -1;
+        var i = idx + "Uid:"u8.Length;
+        while (i < data.Length && (data[i] == ' ' || data[i] == '\t')) i++;
+        if (TryParseInt(data, ref i, out var value)) return value;
+        return -1;
+    }
+
+    private static bool TryParseStat(ReadOnlySpan<byte> data, out StatInfo info)
+    {
+        info = default;
+        var rpar = data.LastIndexOf((byte)')');
+        if (rpar < 0 || rpar + 1 >= data.Length) return false;
 
         var i = rpar + 1;
-        if (i < data.Length && data[i] == (byte)' ') i++;
-        if (i < data.Length) i++; // skip state char
-        if (i < data.Length && data[i] == (byte)' ') i++;
+        if (i < data.Length && data[i] == ')') i++;
+        while (i < data.Length && data[i] == ' ') i++;
 
-        var sign = 1;
-        if (i < data.Length && data[i] == (byte)'-') { sign = -1; i++; }
+        // skip state char
+        if (i < data.Length && data[i] >= 'A' && data[i] <= 'Z') i++;
+        while (i < data.Length && data[i] == ' ') i++;
 
-        var value = 0;
-        while (i < data.Length && data[i] >= (byte)'0' && data[i] <= (byte)'9')
-        {
-            value = value * 10 + (data[i] - (byte)'0');
-            i++;
-        }
-        return value * sign;
+        // ppid
+        if (!TryParseInt(data, ref i, out info.Ppid)) return false;
+
+        // skip pgrp, session, tty_nr, tpgid, flags, minflt, cminflt, majflt, cmajflt
+        for (var k = 0; k < 9; k++)
+            if (!TryParseLong(data, ref i, out _)) return false;
+
+        if (!TryParseLong(data, ref i, out info.Utime)) return false;
+        if (!TryParseLong(data, ref i, out info.Stime)) return false;
+
+        // skip cutime, cstime, priority
+        for (var k = 0; k < 3; k++)
+            if (!TryParseLong(data, ref i, out _)) return false;
+
+        // skip nice
+        if (!TryParseLong(data, ref i, out _)) return false;
+
+        // skip num_threads, itrealvalue
+        for (var k = 0; k < 2; k++)
+            if (!TryParseLong(data, ref i, out _)) return false;
+
+        if (!TryParseLong(data, ref i, out info.StartTime)) return false;
+
+        // skip vsize
+        if (!TryParseLong(data, ref i, out _)) return false;
+
+        if (!TryParseLong(data, ref i, out info.Rss)) return false;
+
+        return true;
     }
 
-    private static long ParseStatmSecond(ReadOnlySpan<byte> data)
+    private static bool TryParseInt(ReadOnlySpan<byte> data, ref int i, out int value)
     {
-        var i = 0;
-        while (i < data.Length && data[i] == (byte)' ') i++;
-        while (i < data.Length && data[i] >= (byte)'0' && data[i] <= (byte)'9') i++;
-        while (i < data.Length && data[i] == (byte)' ') i++;
-
-        var value = 0L;
-        while (i < data.Length && data[i] >= (byte)'0' && data[i] <= (byte)'9')
-        {
-            value = value * 10 + (data[i] - (byte)'0');
-            i++;
-        }
-        return value;
+        value = 0;
+        if (!TryParseLong(data, ref i, out var l)) return false;
+        value = (int)l;
+        return true;
     }
 
-    private static string DecodeUtf8Trim(ReadOnlySpan<byte> data)
+    private static bool TryParseLong(ReadOnlySpan<byte> data, ref int i, out long value)
     {
-        var s = System.Text.Encoding.UTF8.GetString(data);
+        value = 0;
+        while (i < data.Length && data[i] == ' ') i++;
+        if (i >= data.Length) return false;
+
+        var sign = 1L;
+        if (data[i] == '-') { sign = -1; i++; }
+        else if (data[i] == '+') i++;
+
+        var start = i;
+        while (i < data.Length && data[i] >= '0' && data[i] <= '9')
+        {
+            value = value * 10 + (data[i] - '0');
+            i++;
+        }
+        if (i == start) return false;
+        value *= sign;
+        return true;
+    }
+
+    private static bool TryParseDouble(ReadOnlySpan<byte> data, ref int i, out double value)
+    {
+        value = 0;
+        while (i < data.Length && data[i] == ' ') i++;
+        if (i >= data.Length) return false;
+
+        var sign = 1.0;
+        if (data[i] == '-') { sign = -1; i++; }
+        else if (data[i] == '+') i++;
+
+        var start = i;
+        long whole = 0;
+        while (i < data.Length && data[i] >= '0' && data[i] <= '9')
+        {
+            whole = whole * 10 + (data[i] - '0');
+            i++;
+        }
+
+        double frac = 0;
+        var fracDiv = 1.0;
+        if (i < data.Length && data[i] == '.')
+        {
+            i++;
+            while (i < data.Length && data[i] >= '0' && data[i] <= '9')
+            {
+                frac = frac * 10 + (data[i] - '0');
+                fracDiv *= 10;
+                i++;
+            }
+        }
+
+        if (i == start && fracDiv == 1.0) return false;
+        value = sign * (whole + frac / fracDiv);
+        return true;
+    }
+
+    private static string? DecodeUtf8Trim(ReadOnlySpan<byte> data)
+    {
+        if (data.Length == 0) return null;
+        var s = Encoding.UTF8.GetString(data);
         return s.Trim('\n', '\r', '\t', ' ');
     }
 
     private static string? DecodeCmdline(ReadOnlySpan<byte> data)
     {
         if (data.Length == 0) return null;
-        var s = System.Text.Encoding.UTF8.GetString(data);
+        var s = Encoding.UTF8.GetString(data);
         s = s.Replace('\0', ' ').Trim();
         return string.IsNullOrEmpty(s) ? null : s;
+    }
+
+    private struct StatInfo
+    {
+        public int Ppid;
+        public long Utime;
+        public long Stime;
+        public long StartTime;
+        public long Rss;
     }
 }
 
@@ -410,17 +651,30 @@ internal static class MacReader
 
                     var ppid = Marshal.ReadInt32(info, 12); // pbsi_ppid offset
 
+                    string? path = null;
                     string? name = null;
-                    if ((fields & ProcessField.Name) != 0 || fields == 0)
+                    if ((fields & ProcessField.Name) != 0 || (fields & ProcessField.Path) != 0 || fields == 0)
                     {
                         if (proc_pidpath(pid, pathBuf, 4096) > 0)
                         {
-                            var path = Marshal.PtrToStringAnsi(pathBuf);
-                            name = Path.GetFileName(path);
+                            path = Marshal.PtrToStringAnsi(pathBuf);
+                            if ((fields & ProcessField.Name) != 0 || fields == 0)
+                                name = Path.GetFileName(path);
                         }
                     }
 
-                    var p = new ProcessInfo { Pid = pid, Ppid = ppid, Name = name, Command = null, Memory = -1, Cpu = -1 };
+                    var p = new ProcessInfo
+                    {
+                        Pid = pid,
+                        Ppid = ppid,
+                        Uid = -1,
+                        Name = name,
+                        Cmd = null,
+                        Path = path,
+                        StartTime = null,
+                        Memory = -1,
+                        Cpu = -1,
+                    };
                     JsonWriter.Write(writer, p, fields);
                 }
             }

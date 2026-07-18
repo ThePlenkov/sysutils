@@ -2,8 +2,8 @@
 
 Cross-platform process listing as a Node.js `Readable` stream.
 
-`@sysutils/ps` is a thin Node.js wrapper that spawns the fastest available
-native backend and streams parsed process objects.
+`@sysutils/ps` is a thin Node.js wrapper that selects the fastest available
+backend and streams parsed process objects.
 
 ## Install
 
@@ -11,16 +11,22 @@ native backend and streams parsed process objects.
 npm install @sysutils/ps
 ```
 
-You also need at least one native backend installed and built:
+You also need at least one backend installed and built:
 
 ```bash
-npm install @sysutils/ps-rust   # or @sysutils/ps-dotnet
+npm install @sysutils/ps-dotnet
+# or, for in-process .NET interop
+npm install @sysutils/ps-dotnet-nodeapi
 ```
 
 ## API
 
 ```ts
-import { createProcessStream, listProcesses, getBinaryPath } from "@sysutils/ps";
+import {
+  createProcessStream,
+  listProcesses,
+  getBinaryPath,
+} from "@sysutils/ps";
 
 // Stream-first API: returns a Node.js Readable of process objects.
 const stream = createProcessStream();
@@ -28,18 +34,21 @@ for await (const process of stream) {
   console.log(process.pid, process.name, process.ppid);
 }
 
-// Convenience collector (uses the stream under the hood).
+// Convenience collector.
 const all = await listProcesses();
 
 // Force a specific backend or limit fields.
-const dotnet = createProcessStream({ backend: "dotnet", fields: ["pid", "name"] });
+const dotnet = createProcessStream({
+  backend: "dotnet",
+  fields: ["pid", "name"],
+});
 ```
 
 ### `createProcessStream(options?)`
 
 Returns a `Readable` object-mode stream of `ProcessInfo`.
 
-- `options.backend?: "rust" | "dotnet" | "auto"` — force a native backend or
+- `options.backend?: "dotnet" | "dotnet-nodeapi" | "auto"` — force a backend or
   let the package choose. Defaults to `auto` (or `process.env.SYSUTILS_PS_BACKEND`).
 - `options.fields?: string[]` — limit fields, when the backend supports it.
 
@@ -55,7 +64,7 @@ It also emits:
 
 ### `getBinaryPath(backend?)`
 
-Resolves the absolute path to the native binary for a backend, or `undefined`
+Resolves the absolute path to the native binary / assembly for a backend, or `undefined`
 if it is not built for the current platform.
 
 ## ProcessInfo
@@ -64,16 +73,19 @@ if it is not built for the current platform.
 interface ProcessInfo {
   pid: number;
   ppid: number;
+  uid?: number;
   name: string;
-  command?: string;
-  memory?: number;
+  cmd?: string;
+  path?: string;
+  startTime?: Date;
   cpu?: number;
+  memory?: number;
 }
 ```
 
 ## Backends
 
-| backend | package | language |
-|---|---|---|
-| Rust | `@sysutils/ps-rust` | Rust (`sysinfo`) |
-| .NET | `@sysutils/ps-dotnet` | C# (P/Invoke) |
+| backend         | package                       | type                                         |
+| --------------- | ----------------------------- | -------------------------------------------- |
+| .NET CLI        | `@sysutils/ps-dotnet`         | Native AOT executable (spawn)                |
+| .NET in-process | `@sysutils/ps-dotnet-nodeapi` | Managed assembly loaded by `node-api-dotnet` |

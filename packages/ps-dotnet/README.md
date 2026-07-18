@@ -42,4 +42,4 @@ const path = getBinaryPath();
 ## See also
 
 - `@sysutils/ps` — Node.js streaming wrapper.
-- `@sysutils/ps-rust` — alternative Rust backend.
+- `@sysutils/ps-dotnet-nodeapi` — in-process .NET backend.

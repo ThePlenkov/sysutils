@@ -14,7 +14,12 @@
     "arm64"
   ],
   "files": [
-    "bin/",
+    "bin/win32/x64/*",
+    "bin/win32/arm64/*",
+    "bin/linux/x64/*",
+    "bin/linux/arm64/*",
+    "bin/darwin/x64/*",
+    "bin/darwin/arm64/*",
     "index.js",
     "index.d.ts",
     "binaries.json",

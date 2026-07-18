@@ -1,7 +1,7 @@
 {
   "name": "@sysutils/ps-dotnet-nodeapi",
   "version": "0.1.0",
-  "description": "In-process .NET Node-API backend for @sysutils/ps",
+  "description": "In-process .NET backend for @sysutils/ps, loaded via node-api-dotnet",
   "main": "index.js",
   "type": "commonjs",
   "os": [
@@ -14,15 +14,23 @@
     "arm64"
   ],
   "files": [
-    "bin/",
+    "bin/win-x64/*",
+    "bin/win-arm64/*",
+    "bin/linux-x64/*",
+    "bin/linux-arm64/*",
+    "bin/osx-x64/*",
+    "bin/osx-arm64/*",
     "index.js",
     "binaries.json",
     "SysUtils.Ps.NodeApi.csproj",
     "PsModule.cs"
   ],
   "scripts": {
-    "build": "dotnet publish -c Release -r $(node -e 'process.stdout.write(process.platform)')-$(node -e 'process.stdout.write(process.arch)')",
-    "test": "node --test *.test.js"
+    "build": "node scripts/build.js",
+    "build:all": "node scripts/build-all.js"
+  },
+  "optionalDependencies": {
+    "node-api-dotnet": "^0.9.21"
   },
   "license": "MIT"
 }
