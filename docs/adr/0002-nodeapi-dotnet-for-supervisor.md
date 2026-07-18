@@ -112,14 +112,17 @@ fields are `null` when not available.
 
 Measured on a Surface Pro X (Windows 11 ARM64 + WSL2 Ubuntu ARM64):
 
-| Backend                                          | Mean `listProcesses()`                        | Output size               |
-| ------------------------------------------------ | --------------------------------------------- | ------------------------- |
-| `@sysutils/ps` CLI spawn + JSON parse            | ~28 ms                                        | ~822 KB (win-arm64)       |
-| `@sysutils/ps` in-proc (`node-api-dotnet`)       | ~6 ms (Windows), ~0.8 ms (Linux)              | ~500 KB (assembly + deps) |
-| `ps-list`                                        | ~7.8 ms (Linux), unsupported on Windows ARM64 | n/a                       |
+| Backend                                                       | Mean `listProcesses()`                        | Output size               |
+| ------------------------------------------------------------- | --------------------------------------------- | ------------------------- |
+| `@sysutils/ps` full CLI spawn + JSON parse (Windows ARM64)    | ~40–50 ms                                     | ~822 KB (win-arm64)       |
+| `@sysutils/ps` native AOT binary only (Windows ARM64)         | ~28 ms                                        | n/a                       |
+| `@sysutils/ps` in-proc (`node-api-dotnet`)                   | ~6 ms (Windows), ~0.8 ms (Linux)              | ~500 KB (assembly + deps) |
+| `ps-list`                                                     | ~7.8 ms (Linux), unsupported on Windows ARM64 | n/a                       |
 
-The in-process backend is roughly **4–35× faster** than the CLI spawn path and
-`ps-list` on Linux, and it supports Windows ARM64 where `ps-list` does not.
+The in-process backend is roughly **4–35× faster** than the full CLI spawn + JSON
+parse path and `ps-list` on Linux, and it supports Windows ARM64 where `ps-list`
+does not. The native AOT binary itself accounts for ~28 ms of the CLI path; the
+remainder is Node.js spawn and JSON parse overhead.
 
 ## Alternatives considered
 

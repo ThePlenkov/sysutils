@@ -9,6 +9,7 @@
     <AssemblyName>ps</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <SelfContained>true</SelfContained>
     <PublishAot Condition="'$(RuntimeIdentifier)' != '' and '$(RuntimeIdentifier)' == '$(NETCoreSdkRuntimeIdentifier)'">true</PublishAot>
     <PublishSingleFile Condition="'$(PublishAot)' != 'true'">true</PublishSingleFile>

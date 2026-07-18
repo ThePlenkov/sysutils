@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Text.Json;
 using Xunit;
@@ -113,10 +114,16 @@ public class OptionsTests
     }
 
     [Fact]
-    public void Parse_UnknownFieldsFallbackToAll()
+    public void Parse_UnknownFieldsThrows()
     {
-        var o = Options.Parse(new[] { "--fields", "nonsense" });
-        Assert.Equal(ProcessField.All, o.Fields);
+        Assert.Throws<ArgumentException>(() => Options.Parse(new[] { "--fields", "nonsense" }));
+    }
+
+    [Fact]
+    public void Parse_AcceptsMixedCase()
+    {
+        var o = Options.Parse(new[] { "--fields", "Pid,Name,CPU" });
+        Assert.Equal(ProcessField.Pid | ProcessField.Name | ProcessField.Cpu, o.Fields);
     }
 
     [Fact]

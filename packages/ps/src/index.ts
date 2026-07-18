@@ -92,10 +92,22 @@ export function getBinaryPath(
   }
 }
 
-function resolveBackend(options?: PsOptions): SupportedBackend {
+function resolveBackend(
+  options?: PsOptions,
+  allowNodeapi = true,
+): SupportedBackend {
   const requested = options?.backend ?? backendFromEnv() ?? "auto";
-  if (requested !== "auto") return requested;
-  const order: SupportedBackend[] = ["dotnet", "dotnet-nodeapi"];
+  if (requested !== "auto") {
+    if (requested !== "dotnet" && requested !== "dotnet-nodeapi") {
+      throw new Error(
+        "No @sysutils/ps native backend found. Run `npm run build` in @sysutils/ps (or install a prebuilt binary).",
+      );
+    }
+    return requested;
+  }
+  const order: SupportedBackend[] = allowNodeapi
+    ? ["dotnet", "dotnet-nodeapi"]
+    : ["dotnet"];
   for (const backend of order) {
     if (getBinaryPath(backend)) return backend;
   }
@@ -113,7 +125,7 @@ function normalizeProcessInfo(obj: Record<string, unknown>): ProcessInfo {
 }
 
 export function createProcessStream(options?: PsOptions): ProcessStream {
-  const backend = resolveBackend(options);
+  const backend = resolveBackend(options, false);
   if (backend === "dotnet-nodeapi") {
     throw new Error(
       'The "dotnet-nodeapi" backend does not support streaming. Use listProcesses() instead.',
@@ -212,7 +224,10 @@ export async function listProcesses(
         // node-api-dotnet may be installed without the .NET runtime; fall back to the CLI.
       }
     }
-    return listProcesses({ ...options, backend: "dotnet" });
+    if (getBinaryPath("dotnet")) return listProcesses({ ...options, backend: "dotnet" });
+    throw new Error(
+      "The dotnet-nodeapi backend failed to load and no dotnet CLI binary is available.",
+    );
   }
 
   const result: ProcessInfo[] = [];
