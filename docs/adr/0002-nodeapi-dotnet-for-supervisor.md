@@ -25,8 +25,8 @@ managed .NET assembly exposing `PsModule.ListProcesses(fields)` and load it with
 `node-api-dotnet`. Both backends ship inside `@sysutils/ps`; the CLI binary is
 loaded from `bin/<platform>/<arch>/ps` and the nodeapi assembly from
 `bin/nodeapi/<rid>/ps-nodeapi.dll`. `@sysutils/ps` will keep the CLI backend as
-the default and use the in-process backend only when explicitly requested
-(`backend: "dotnet-nodeapi"`) until `node-api-dotnet` resolves its Node-API
+the default and use the in-process backend when explicitly requested
+(`backend: "dotnet-nodeapi"` or `SYSUTILS_PS_BACKEND=dotnet-nodeapi`) or when `auto` resolution cannot find a CLI binary for the current platform, until `node-api-dotnet` resolves its Node-API
 shutdown instability on Node.js >= 24.14.0.
 
 The assembly returns a JSON-lines string so the Node side can reuse the existing

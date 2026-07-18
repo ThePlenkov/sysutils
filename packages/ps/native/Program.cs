@@ -239,9 +239,9 @@ internal static class NativeHelpers
 {
     public static IntPtr GrowBuffer(IntPtr buffer, ref int size, int maxSize, string context)
     {
-        if (size > maxSize)
+        if (size >= maxSize)
             throw new OutOfMemoryException($"{context} buffer exceeded maximum size.");
-        var newSize = size * 2;
+        var newSize = size > maxSize / 2 ? maxSize : size * 2;
         var newBuffer = Marshal.AllocHGlobal(newSize);
         Marshal.FreeHGlobal(buffer);
         size = newSize;
@@ -556,8 +556,9 @@ internal static class LinuxReader
         if (i < data.Length && data[i] == ')') i++;
         while (i < data.Length && data[i] == ' ') i++;
 
-        // skip state char
-        if (i < data.Length && data[i] >= 'A' && data[i] <= 'Z') i++;
+        // skip state char (uppercase or lowercase)
+        if (i >= data.Length) return false;
+        i++;
         while (i < data.Length && data[i] == ' ') i++;
 
         // ppid

@@ -227,14 +227,21 @@ function listWithDotnetNodeapi(
 export async function listProcesses(
   options?: PsOptions,
 ): Promise<ProcessInfo[]> {
+  const requested = options?.backend ?? backendFromEnv() ?? "auto";
   const backend = resolveBackend(options);
   if (backend === "dotnet-nodeapi") {
     const binaryPath = getBinaryPath("dotnet-nodeapi");
-    if (binaryPath) {
+    if (!binaryPath) {
+      if (requested === "dotnet-nodeapi") {
+        throw new Error(
+          `Backend "dotnet-nodeapi" was selected but its native binary is missing. Run \`npm run build:nodeapi\` in @sysutils/ps.`,
+        );
+      }
+    } else {
       try {
         return listWithDotnetNodeapi(options, binaryPath);
       } catch (err) {
-        if (options?.backend === "dotnet-nodeapi") throw err;
+        if (requested === "dotnet-nodeapi") throw err;
         // node-api-dotnet may be installed without the .NET runtime; fall back to the CLI.
       }
     }

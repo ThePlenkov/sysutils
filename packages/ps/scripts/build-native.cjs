@@ -41,6 +41,10 @@ function build(kind) {
     cwd: path.resolve(__dirname, '..'),
     stdio: 'inherit',
   });
+  if (result.error) {
+    console.error(`Failed to start build script: ${result.error.message}`);
+    process.exit(1);
+  }
   process.exit(result.status ?? 1);
 }
 

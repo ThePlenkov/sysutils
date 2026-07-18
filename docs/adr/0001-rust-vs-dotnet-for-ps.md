@@ -83,7 +83,8 @@ available. Additional fields are `null` when not available.
 
 - Only one set of platform readers needs maintenance.
 - CI builds one `@sysutils/ps` package with both CLI and in-process binaries.
-- `@sysutils/ps` defaults to the CLI backend and uses `dotnet-nodeapi` only when
-  requested or set via `SYSUTILS_PS_BACKEND`, because `node-api-dotnet` can hang
-  or crash on Node shutdown in some test environments.
+- `@sysutils/ps` defaults to the CLI backend and uses `dotnet-nodeapi` when
+  requested, set via `SYSUTILS_PS_BACKEND`, or selected automatically when the CLI
+  binary is unavailable, because `node-api-dotnet` can hang or crash on Node shutdown
+  in some test environments.
 - The Rust package (`packages/ps-rust`) is removed from source control.

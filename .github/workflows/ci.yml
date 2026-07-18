@@ -19,10 +19,13 @@ jobs:
           dotnet-version: "8.0.x"
       - run: npm install
       - run: npm run build:cli -w packages/ps
+      - run: npm run build:nodeapi -w packages/ps
       - run: npm run build -w packages/ps
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+        env:
+          SYSUTILS_PS_TEST_NODEAPI: 1
 
   native:
     strategy:

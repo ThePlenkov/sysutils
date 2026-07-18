@@ -6,13 +6,15 @@
 ## 1. Repository purpose
 
 `@sysutils` is a cross-platform, stream-first system utilities monorepo for
-Node.js. Each utility ships one or more native backends and exposes a single
-async Node.js API that returns native streams.
+Node.js. Each utility ships one or more native backends and exposes a stream-first
+async Node.js API (e.g. `createProcessStream()`) plus optional materializing
+convenience APIs (e.g. `listProcesses()`) that delegate to the same backend.
 
 This repository is opinionated:
 
-- **Stream-first**: public APIs return `Readable` streams or async iterators,
-  not arrays or synchronous lists.
+- **Stream-first**: primary public APIs return `Readable` streams or async iterators.
+  Convenience collectors (e.g. `Promise<ProcessInfo[]>`) are allowed when they build
+  on the streaming backend and do not add synchronous work.
 - **Native-by-default**: heavy or OS-specific work is done in prebuilt native
   binaries, not pure Node.js workarounds.
 - **Cross-platform**: every package must build and pass tests on Windows,

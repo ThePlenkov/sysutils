@@ -10,7 +10,9 @@ public static class PsModule
     [JSExport]
     public static string ListProcesses(string fields)
     {
-        var opts = Options.Parse(new[] { "--fields", fields ?? string.Empty });
+        var opts = string.IsNullOrEmpty(fields)
+            ? Options.Parse(Array.Empty<string>())
+            : Options.Parse(new[] { "--fields", fields });
         using var writer = new StringWriter();
 
         if (OperatingSystem.IsWindows())

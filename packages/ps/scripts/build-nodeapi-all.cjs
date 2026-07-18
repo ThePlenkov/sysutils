@@ -22,10 +22,12 @@ const RIDS = [
   },
 ];
 
-const projectFile = path.resolve(__dirname, "..", "native", "nodeapi", "SysUtils.Ps.NodeApi.csproj");
+const projectRoot = path.resolve(__dirname, "..");
+const projectFile = path.join(projectRoot, "native", "nodeapi", "SysUtils.Ps.NodeApi.csproj");
 
 function build(target) {
   console.log(`Building ${target.rid} ...`);
+  const outDir = path.join(projectRoot, "bin", "nodeapi", target.rid);
   const args = [
     "publish",
     projectFile,
@@ -33,6 +35,8 @@ function build(target) {
     "Release",
     "-r",
     target.rid,
+    "-o",
+    outDir,
     "--nologo",
   ];
   const r = spawnSync("dotnet", args, { stdio: "inherit" }); // NOSONAR: dotnet is the .NET SDK CLI resolved from PATH; args are generated internally
