@@ -19,4 +19,9 @@ const result = spawnSync(process.execPath, ['--test', ...files], {
   stdio: 'inherit',
 });
 
+if (result.error) {
+  console.error(result.error);
+  process.exit(1);
+}
+
 process.exit(result.status ?? (result.signal ? 1 : 0));
