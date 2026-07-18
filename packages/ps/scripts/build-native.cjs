@@ -34,10 +34,8 @@ function build(kind) {
     console.error(`Unsupported platform: ${process.platform}-${process.arch}`);
     process.exit(1);
   }
-  const allScript = kind === 'cli'
-    ? path.resolve(__dirname, 'build-cli-all.cjs')
-    : path.resolve(__dirname, 'build-nodeapi-all.cjs');
-  const result = spawnSync(process.execPath, [allScript, rid], {
+  const allScript = path.resolve(__dirname, 'build-native-all.cjs');
+  const result = spawnSync(process.execPath, [allScript, kind, rid], {
     cwd: path.resolve(__dirname, '..'),
     stdio: 'inherit',
   });

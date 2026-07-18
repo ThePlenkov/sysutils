@@ -19,14 +19,14 @@ function publishProject(target, projectFile, outDir) {
   return true;
 }
 
-function runBuilds(targets, buildFn) {
-  const only = process.argv.slice(2);
+function runBuilds(targets, buildFn, argv = process.argv.slice(2)) {
+  const only = argv;
   const filtered = only.length ? targets.filter((t) => only.includes(t.rid)) : targets;
   let ok = true;
   for (const t of filtered) {
     if (!buildFn(t)) ok = false;
   }
-  process.exit(ok ? 0 : 1);
+  return ok;
 }
 
 module.exports = { publishProject, runBuilds };
