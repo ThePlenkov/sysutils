@@ -24,7 +24,7 @@ Both approaches ship the same surface area:
 | Dimension | Rust (`@sysutils/ps-rust`) | .NET (`@sysutils/ps-dotnet`) |
 |---|---|---|
 | **Language / runtime** | No runtime; compiled to native machine code. | Native AOT or single-file self-contained; still carries a small runtime. |
-| **Binary size** | ~1–3 MB after `strip` and `lto`. | ~2–8 MB with trimming / Native AOT. |
+| **Binary size** | ~400–520 KB after `strip` and `lto`. | ~2.1–2.6 MB with Native AOT; single-file can be larger. |
 | **Process APIs** | `sysinfo` crate abstracts Windows (`CreateToolhelp32Snapshot`), Linux (`/proc`), and macOS (`libproc`). | Manual P/Invoke to `kernel32`, `libSystem.dylib`, and parsing `/proc`. More code per platform. |
 | **Cross-compilation** | Needs `cargo-zigbuild` + `zig` or per-OS runners. `rustup target` adds targets easily. | `dotnet publish -r <RID>` from a single Linux runner works for many RIDs; Windows Native AOT requires a Windows build host with MSVC. |
 | **Build speed** | Slower first build; `cargo` incremental builds are fast. | `dotnet` builds are generally faster and cached via NuGet. |
@@ -54,6 +54,18 @@ Measured on a Surface Pro X (Windows 11 ARM64 + WSL2 Ubuntu ARM64):
 > measured under x64 emulation on an ARM64 Windows host. The x64 `fastlist` still
 > wins in raw speed, but the native ARM64 .NET AOT build is the fastest
 > cross-platform, feature-complete option on this machine.
+
+### Binary sizes
+
+Measured on the same builds:
+
+| Binary | Size |
+|---|---|
+| `@sysutils/ps-rust` win-x64 | ~397 KB |
+| `@sysutils/ps-rust` linux-arm64 | ~517 KB |
+| `@sysutils/ps-dotnet` AOT win-arm64 | ~2.1 MB |
+| `@sysutils/ps-dotnet` AOT win-x64 | ~2.2 MB |
+| `@sysutils/ps-dotnet` AOT linux-arm64 | ~2.6 MB |
 
 Key findings:
 
