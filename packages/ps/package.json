@@ -1,0 +1,21 @@
+{
+  "name": "@sysutils/ps",
+  "version": "0.1.0",
+  "description": "Cross-platform process enumeration for Node.js",
+  "main": "index.js",
+  "type": "commonjs",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ],
+  "scripts": {
+    "test": "node tests/index.test.js"
+  },
+  "dependencies": {
+    "@sysutils/ps-dotnet": "^0.1.0"
+  },
+  "license": "MIT"
+}
