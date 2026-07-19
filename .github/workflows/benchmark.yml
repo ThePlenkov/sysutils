@@ -23,6 +23,22 @@ on:
         required: true
         default: true
         type: boolean
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/benchmark.yml'
+      - 'packages/ps/scripts/benchmark.cjs'
+      - 'packages/ps/package.json'
+      - 'packages/ps/src/index.ts'
+
+env:
+  BENCHMARK_RUNS: ${{ inputs.runs || '20' }}
+  BENCHMARK_WARMUP: ${{ inputs.warmup || '2' }}
+  BENCHMARK_FIELDS: ${{ inputs.fields || 'pid,ppid,name' }}
+  SYSUTILS_PS_BENCHMARK_COMPARE: ${{ inputs.compare-ps-list && '1' || '0' }}
+
+permissions:
+  contents: read
 
 jobs:
   benchmark:
@@ -50,7 +66,7 @@ jobs:
         run: npm install
 
       - name: Install ps-list for comparison
-        if: inputs.compare-ps-list
+        if: env.SYSUTILS_PS_BENCHMARK_COMPARE == '1'
         continue-on-error: true
         run: npm install ps-list --no-save -w packages/ps
 
@@ -65,6 +81,49 @@ jobs:
 
       - name: Run benchmark
         shell: bash
-        env:
-          SYSUTILS_PS_BENCHMARK_COMPARE: ${{ inputs.compare-ps-list && '1' || '0' }}
-        run: npm run benchmark -w packages/ps -- --runs ${{ inputs.runs }} --warmup ${{ inputs.warmup }} --fields ${{ inputs.fields }} --compare
+        run: |
+          mkdir -p benchmark-output
+          COMPARE_FLAG=""
+          if [ "${{ env.SYSUTILS_PS_BENCHMARK_COMPARE }}" = "1" ]; then
+            COMPARE_FLAG="--compare"
+          fi
+          npm run benchmark -w packages/ps -- \
+            --runs ${{ env.BENCHMARK_RUNS }} \
+            --warmup ${{ env.BENCHMARK_WARMUP }} \
+            --fields ${{ env.BENCHMARK_FIELDS }} \
+            $COMPARE_FLAG \
+            --svg benchmark-output/benchmark-${{ matrix.os }}.svg
+
+      - name: Upload SVG artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ matrix.os }}
+          path: benchmark-output/benchmark-${{ matrix.os }}.svg
+
+  publish-badge:
+    name: Publish benchmark badge
+    needs: benchmark
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all benchmark SVGs
+        uses: actions/download-artifact@v4
+        with:
+          path: benchmark-output
+          merge-multiple: true
+
+      - name: Pick Linux badge as the main badge
+        run: |
+          mkdir -p _site
+          cp benchmark-output/benchmark-ubuntu-latest.svg _site/benchmark.svg
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site
+          publish_branch: gh-pages
+          force_orphan: true

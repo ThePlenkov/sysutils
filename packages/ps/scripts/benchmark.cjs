@@ -15,6 +15,7 @@ const runsArg = parseInt(getArg('--runs') ?? process.env.SYSUTILS_PS_BENCHMARK_R
 const warmupArg = parseInt(getArg('--warmup') ?? process.env.SYSUTILS_PS_BENCHMARK_WARMUP ?? '3', 10);
 const fieldsArg = getArg('--fields') ?? 'pid,ppid,name';
 const summaryFile = getArg('--summary') ?? process.env.GITHUB_STEP_SUMMARY;
+const svgFile = getArg('--svg') ?? process.env.SYSUTILS_PS_BENCHMARK_SVG;
 const compare = hasArg('--compare') || process.env.SYSUTILS_PS_BENCHMARK_COMPARE === '1';
 
 function getArg(name) {
@@ -162,9 +163,14 @@ async function main() {
 
   const payload = { meta, results };
   const html = renderHtml(meta, results);
+  const svg = renderSvg(meta, results);
 
   if (summaryFile) {
     fs.appendFileSync(summaryFile, html);
+  }
+
+  if (svgFile) {
+    fs.writeFileSync(svgFile, svg, 'utf8');
   }
 
   // Write JSON to stdout and exit explicitly. Forcing exit avoids the
@@ -232,6 +238,69 @@ function renderHtml(meta, results) {
   </tbody>
 </table>
 `;
+}
+
+function renderSvg(meta, results) {
+  const width = 720;
+  const rowHeight = 26;
+  const headerHeight = 86;
+  const footerHeight = 28;
+  const height = headerHeight + rowHeight * (results.length + 1) + footerHeight;
+
+  const header = [
+    { x: 20, label: 'Backend', align: 'start' },
+    { x: 360, label: 'Mean', align: 'end' },
+    { x: 440, label: 'P95', align: 'end' },
+    { x: 520, label: 'P99', align: 'end' },
+    { x: 600, label: 'Count', align: 'end' },
+  ];
+
+  const headerRow = header
+    .map((h) => `<text x="${h.x}" y="${headerHeight - 22}" text-anchor="${h.align}" font-size="13" font-weight="600" fill="#6b7280">${escapeXml(h.label)}</text>`)
+    .join('');
+
+  const title = `${meta.rid} — ${meta.fields.join(',')} — ${meta.runs} runs`;
+  const subtitle = `${meta.node} / .NET ${meta.dotnet} / ${meta.date.slice(0, 19).replace('T', ' ')}`;
+
+  const rows = results
+    .map((r, i) => {
+      const y = headerHeight + rowHeight * (i + 1);
+      const bg = i % 2 === 0 ? '#f9fafb' : '#ffffff';
+      const mean = r.error ? '—' : format(r.stats.mean);
+      const p95 = r.error ? '—' : format(r.stats.p95);
+      const p99 = r.error ? '—' : format(r.stats.p99);
+      const count = r.error ? '—' : String(r.count);
+      const errorText = r.error ? ` (${escapeXml(r.error)})` : '';
+      const name = escapeXml(r.name) + errorText;
+      const fill = r.error ? '#dc2626' : '#111827';
+      return `<rect x="0" y="${y - rowHeight + 4}" width="${width}" height="${rowHeight}" fill="${bg}" />
+<text x="20" y="${y}" text-anchor="start" font-size="13" fill="${fill}">${name}</text>
+<text x="360" y="${y}" text-anchor="end" font-size="13" fill="${fill}">${mean}</text>
+<text x="440" y="${y}" text-anchor="end" font-size="13" fill="${fill}">${p95}</text>
+<text x="520" y="${y}" text-anchor="end" font-size="13" fill="${fill}">${p99}</text>
+<text x="600" y="${y}" text-anchor="end" font-size="13" fill="${fill}">${count}</text>`;
+    })
+    .join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="${width}" height="${height}" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="6" />
+  <text x="20" y="28" font-size="16" font-weight="700" fill="#111827">@sysutils/ps benchmark</text>
+  <text x="20" y="48" font-size="12" fill="#6b7280">${escapeXml(title)}</text>
+  ${headerRow}
+  <line x1="16" y1="${headerHeight - 8}" x2="${width - 16}" y2="${headerHeight - 8}" stroke="#e5e7eb" stroke-width="1" />
+  ${rows}
+  <text x="${width - 20}" y="${height - 8}" text-anchor="end" font-size="11" fill="#9ca3af">${escapeXml(subtitle)}</text>
+</svg>`;
+}
+
+function escapeXml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
 }
 
 function escapeHtml(s) {

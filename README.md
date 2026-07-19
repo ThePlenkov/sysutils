@@ -63,6 +63,16 @@ collector helpers on top.
 | --- | --- |
 | [`@sysutils/ps`](./packages/ps) | Cross-platform process listing as a Node.js `Readable` stream. |
 
+## Benchmark
+
+The benchmark workflow runs on demand and keeps an up-to-date SVG badge
+without touching this README:
+
+![@sysutils/ps benchmark](https://ThePlenkov.github.io/sysutils/benchmark.svg)
+
+> The badge is published to the `gh-pages` branch by the `Benchmark` workflow.
+> Enable GitHub Pages from `gh-pages` for the image above to render.
+
 ## Design
 
 Each utility follows the same contract:
