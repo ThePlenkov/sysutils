@@ -151,6 +151,16 @@ jobs:
           ver=$(node -p "require('./package.json').version")
           if [ -n "$NPM_TOKEN" ]; then
             echo "has-token=true" >> "$GITHUB_OUTPUT"
+            # Automation/granular tokens get 403 on profile endpoints (they bypass 2FA).
+            # Classic publish tokens can read the profile; if the account has 2FA for writes,
+            # the publish will fail with EOTP in non-interactive CI.
+            if profile_json=$(npm profile get --json --registry https://registry.npmjs.org 2>/dev/null); then
+              tfa_mode=$(node -p "const p=JSON.parse(process.argv[1]); (p.tfa && p.tfa.mode) || ''" "$profile_json")
+              if [ "$tfa_mode" = "auth-and-writes" ]; then
+                echo "::error::The NPM_TOKEN secret requires 2FA for publish. Create a granular access token with 'bypass 2FA' enabled at https://www.npmjs.com/settings/tokens and set it as NPM_TOKEN, or publish the first version of each @sysutils/ps-* package manually and switch to OIDC trusted publishing for subsequent releases."
+                exit 1
+              fi
+            fi
           else
             echo "has-token=false" >> "$GITHUB_OUTPUT"
           fi
