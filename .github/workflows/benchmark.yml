@@ -27,7 +27,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/benchmark.yml'
-      - 'packages/ps/scripts/benchmark.cjs'
+      - 'packages/ps/scripts/benchmark.ts'
       - 'packages/ps/package.json'
 
 env:
@@ -42,7 +42,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
-      actions: write
     strategy:
       fail-fast: false
       matrix:
@@ -67,7 +66,7 @@ jobs:
       - name: Install ps-list for comparison
         if: env.SYSUTILS_PS_BENCHMARK_COMPARE == '1'
         continue-on-error: true
-        run: npm install ps-list --no-save -w packages/ps
+        run: npm install ps-list@9.0.0 --no-save -w packages/ps
 
       - name: Build native CLI
         run: npm run build:cli -w packages/ps
@@ -83,15 +82,15 @@ jobs:
         run: |
           mkdir -p benchmark-output
           COMPARE_FLAG=""
-          if [ "${{ env.SYSUTILS_PS_BENCHMARK_COMPARE }}" = "1" ]; then
+          if [ "$SYSUTILS_PS_BENCHMARK_COMPARE" = "1" ]; then
             COMPARE_FLAG="--compare"
           fi
           node packages/ps/scripts/benchmark.ts \
-            --runs ${{ env.BENCHMARK_RUNS }} \
-            --warmup ${{ env.BENCHMARK_WARMUP }} \
-            --fields ${{ env.BENCHMARK_FIELDS }} \
+            --runs "$BENCHMARK_RUNS" \
+            --warmup "$BENCHMARK_WARMUP" \
+            --fields "$BENCHMARK_FIELDS" \
             $COMPARE_FLAG \
-            --svg benchmark-output/benchmark-${{ matrix.os }}.svg
+            --svg "benchmark-output/benchmark-${{ matrix.os }}.svg"
 
       - name: Upload SVG artifact
         uses: actions/upload-artifact@v4
@@ -102,7 +101,7 @@ jobs:
   publish-badge:
     name: Publish benchmark badge
     needs: benchmark
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
