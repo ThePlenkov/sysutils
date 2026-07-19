@@ -255,7 +255,7 @@ internal static class NativeHelpers
             Pid = pid,
             Ppid = ppid,
             Uid = -1,
-            Name = name,
+            Name = name ?? string.Empty,
             Cmd = null,
             Path = path,
             StartTime = null,
@@ -480,6 +480,8 @@ internal static class LinuxReader
                 name = Path.GetFileName(path);
             if (string.IsNullOrEmpty(name))
                 name = comm;
+            if (string.IsNullOrEmpty(name))
+                name = string.Empty;
         }
 
         double memory = -1;
