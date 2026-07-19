@@ -37,6 +37,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ThePlenkov/sysutils.git"
+    "url": "https://github.com/sysutils-ts/sysutils.git"
   }
 }
