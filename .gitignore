@@ -16,6 +16,7 @@ out/
 coverage/
 *.log
 packages/*/dist-platforms/
+tmp-platform-stubs/
 
 # Native binaries
 target/
