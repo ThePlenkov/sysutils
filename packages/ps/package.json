@@ -25,13 +25,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ThePlenkov/sysutils.git",
+    "url": "https://github.com/sysutils-ts/sysutils.git",
     "directory": "packages/ps"
   },
   "bugs": {
-    "url": "https://github.com/ThePlenkov/sysutils/issues"
+    "url": "https://github.com/sysutils-ts/sysutils/issues"
   },
-  "homepage": "https://github.com/ThePlenkov/sysutils/tree/main/packages/ps#readme",
+  "homepage": "https://github.com/sysutils-ts/sysutils/tree/main/packages/ps#readme",
   "tsdown": {
     "entry": [
       "src/index.ts",
