@@ -51,17 +51,17 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: lts/*
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
 
       - name: Install dependencies
         run: npm install
@@ -96,7 +96,7 @@ jobs:
             --svg "benchmark-output/benchmark-${{ matrix.os }}.svg"
 
       - name: Upload SVG artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-${{ matrix.os }}
           path: benchmark-output/benchmark-${{ matrix.os }}.svg
@@ -111,7 +111,7 @@ jobs:
       actions: read
     steps:
       - name: Download all benchmark SVGs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: benchmark-output
           merge-multiple: true
@@ -130,7 +130,7 @@ jobs:
 
       - name: Deploy to GitHub Pages
         if: ${{ steps.pick-badge.outputs.exists == 'true' }}
-        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./_site
