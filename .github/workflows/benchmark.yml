@@ -112,6 +112,7 @@ jobs:
         with:
           path: benchmark-output
           merge-multiple: true
+          if-no-files-found: warn
 
       - name: Pick Linux badge as the main badge
         id: pick-badge
