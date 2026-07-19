@@ -86,7 +86,7 @@ jobs:
           if [ "${{ env.SYSUTILS_PS_BENCHMARK_COMPARE }}" = "1" ]; then
             COMPARE_FLAG="--compare"
           fi
-          node packages/ps/scripts/benchmark.cjs \
+          node packages/ps/scripts/benchmark.ts \
             --runs ${{ env.BENCHMARK_RUNS }} \
             --warmup ${{ env.BENCHMARK_WARMUP }} \
             --fields ${{ env.BENCHMARK_FIELDS }} \
