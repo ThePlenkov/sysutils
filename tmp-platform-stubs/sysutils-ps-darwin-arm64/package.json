@@ -1,0 +1,23 @@
+{
+  "name": "@sysutils/ps-darwin-arm64",
+  "version": "0.0.0",
+  "description": "Stub package for @sysutils/ps-darwin-arm64. This reserves the package name and marks the supported OS/CPU. The first real release will be published by CI with the native binaries.",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sysutils-ts/sysutils.git",
+    "directory": "packages/ps"
+  }
+}
