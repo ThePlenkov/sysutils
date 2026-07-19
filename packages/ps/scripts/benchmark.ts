@@ -50,37 +50,21 @@ if (!fs.existsSync(distIndex)) {
   process.exit(1);
 }
 
-const runsArg = Number.parseInt(
-  getArg("--runs") ?? process.env.SYSUTILS_PS_BENCHMARK_RUNS ?? "50",
-  10,
+const runsArg = parsePositiveInt(
+  getArg("--runs") ?? process.env.SYSUTILS_PS_BENCHMARK_RUNS,
+  50,
+  "--runs",
 );
-const warmupArg = Number.parseInt(
-  getArg("--warmup") ?? process.env.SYSUTILS_PS_BENCHMARK_WARMUP ?? "3",
-  10,
+const warmupArg = parseNonNegativeInt(
+  getArg("--warmup") ?? process.env.SYSUTILS_PS_BENCHMARK_WARMUP,
+  3,
+  "--warmup",
 );
 const fieldsArg = getArg("--fields") ?? "pid,ppid,name";
 const summaryFile = getArg("--summary") ?? process.env.GITHUB_STEP_SUMMARY;
 const svgFile = getArg("--svg") ?? process.env.SYSUTILS_PS_BENCHMARK_SVG;
 const compare =
   hasArg("--compare") || process.env.SYSUTILS_PS_BENCHMARK_COMPARE === "1";
-
-if (!Number.isFinite(runsArg) || !Number.isInteger(runsArg) || runsArg <= 0) {
-  console.error(
-    `Invalid --runs value: must be a positive integer (got ${getArg("--runs") ?? process.env.SYSUTILS_PS_BENCHMARK_RUNS ?? "50"}).`,
-  );
-  process.exit(1);
-}
-
-if (
-  !Number.isFinite(warmupArg) ||
-  !Number.isInteger(warmupArg) ||
-  warmupArg < 0
-) {
-  console.error(
-    `Invalid --warmup value: must be a non-negative integer (got ${getArg("--warmup") ?? process.env.SYSUTILS_PS_BENCHMARK_WARMUP ?? "3"}).`,
-  );
-  process.exit(1);
-}
 
 function getArg(name: string): string | undefined {
   const idx = process.argv.indexOf(name);
@@ -91,6 +75,36 @@ function getArg(name: string): string | undefined {
 
 function hasArg(name: string): boolean {
   return process.argv.includes(name);
+}
+
+function parsePositiveInt(
+  raw: string | undefined,
+  defaultValue: number,
+  name: string,
+): number {
+  const str = (raw ?? String(defaultValue)).trim();
+  if (!/^[1-9]\d*$/.test(str)) {
+    console.error(
+      `Invalid ${name} value: must be a positive integer (got "${str}").`,
+    );
+    process.exit(1);
+  }
+  return Number(str);
+}
+
+function parseNonNegativeInt(
+  raw: string | undefined,
+  defaultValue: number,
+  name: string,
+): number {
+  const str = (raw ?? String(defaultValue)).trim();
+  if (!/^\d+$/.test(str)) {
+    console.error(
+      `Invalid ${name} value: must be a non-negative integer (got "${str}").`,
+    );
+    process.exit(1);
+  }
+  return Number(str);
 }
 
 function parseFields(raw: string): string[] {
@@ -342,6 +356,13 @@ function renderHtml(meta: Meta, results: Result[]): string {
     })
     .join("\n");
 
+  const compareNote = results.some((r) => r.id === "ps-list")
+    ? `<p>
+  Comparing <code>@sysutils/ps</code> with <code>ps-list</code>, the package it
+  is intended to replace.
+</p>`
+    : "";
+
   return `
 <h2>@sysutils/ps benchmark — ${escapeHtml(meta.rid)}</h2>
 <p>
@@ -351,9 +372,9 @@ function renderHtml(meta: Meta, results: Result[]): string {
   <strong>Warmup:</strong> ${meta.warmup}<br>
   <strong>Date:</strong> ${escapeHtml(meta.date)}
 </p>
+${compareNote}
 <p>
-  Comparing <code>@sysutils/ps</code> with <code>ps-list</code>, the package it
-  is intended to replace. <code>@sysutils/ps</code> uses native AOT binaries
+  <code>@sysutils/ps</code> uses native AOT binaries
   (<code>ps</code> on Unix, <code>ps.exe</code> on Windows) and an optional
   in-process <code>node-api-dotnet</code> backend when available, so no external
   <code>ps</code> or <code>tasklist</code> commands are spawned.
