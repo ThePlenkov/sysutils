@@ -1,18 +1,25 @@
+import fs from "node:fs";
 import semanticRelease from "semantic-release";
 
-const result = await semanticRelease(
-  {
-    dryRun: true,
-    noCi: false,
-    branches: ["main"],
-    tagFormat: "v${version}",
-  },
-  { stdout: process.stderr, stderr: process.stderr },
-);
+const githubOutput = process.env.GITHUB_OUTPUT;
+
+const result = await semanticRelease({
+  dryRun: true,
+  noCi: false,
+  branches: ["main"],
+  tagFormat: "v${version}",
+});
+
+function setOutput(lines) {
+  if (githubOutput) {
+    fs.appendFileSync(githubOutput, lines, "utf8");
+  } else {
+    process.stdout.write(lines);
+  }
+}
 
 if (result && result.nextRelease) {
-  console.log(`version=${result.nextRelease.version}`);
-  console.log(`released=true`);
+  setOutput(`version=${result.nextRelease.version}\nreleased=true\n`);
 } else {
-  console.log("released=false");
+  setOutput("released=false\n");
 }

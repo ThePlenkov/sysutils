@@ -83,7 +83,7 @@ jobs:
         id: version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node scripts/get-next-version.mjs >> "$GITHUB_OUTPUT"
+        run: node scripts/get-next-version.mjs
 
   publish-platform:
     name: Publish platform package (${{ matrix.rid }})
