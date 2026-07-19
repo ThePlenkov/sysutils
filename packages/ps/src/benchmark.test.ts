@@ -19,8 +19,8 @@ test("benchmark CLI rejects --runs 0", () => {
   const result = run(["--runs", "0"]);
   assert.notStrictEqual(result.status, 0, "expected non-zero exit code");
   assert.ok(
-    result.stderr.includes("positive integer"),
-    `stderr should mention positive integer: ${result.stderr}`,
+    result.stderr.includes("at least 1"),
+    `stderr should mention minimum value: ${result.stderr}`,
   );
 });
 
@@ -28,8 +28,36 @@ test("benchmark CLI rejects --warmup -1", () => {
   const result = run(["--warmup", "-1"]);
   assert.notStrictEqual(result.status, 0, "expected non-zero exit code");
   assert.ok(
-    result.stderr.includes("non-negative integer"),
-    `stderr should mention non-negative integer: ${result.stderr}`,
+    result.stderr.includes("must be an integer"),
+    `stderr should reject negative integer: ${result.stderr}`,
+  );
+});
+
+test("benchmark CLI rejects non-numeric --runs", () => {
+  const result = run(["--runs", "10x"]);
+  assert.notStrictEqual(result.status, 0, "expected non-zero exit code");
+  assert.ok(
+    result.stderr.includes("must be an integer"),
+    `stderr should mention integer requirement: ${result.stderr}`,
+  );
+});
+
+test("benchmark CLI rejects empty --fields", () => {
+  const result = run(["--fields", ",,,"]);
+  assert.notStrictEqual(result.status, 0, "expected non-zero exit code");
+  assert.ok(
+    result.stderr.includes("at least one field"),
+    `stderr should mention field requirement: ${result.stderr}`,
+  );
+});
+
+test("benchmark CLI rejects --svg outside the working directory", () => {
+  const escapePath = path.resolve(packageDir, "..", "tmp", "escape.svg");
+  const result = run(["--svg", escapePath]);
+  assert.notStrictEqual(result.status, 0, "expected non-zero exit code");
+  assert.ok(
+    result.stderr.includes("inside the current working directory"),
+    `stderr should reject escaping path: ${result.stderr}`,
   );
 });
 
@@ -60,6 +88,22 @@ test(
     assert.ok(
       payload.results.every((r) => r.id !== "dotnet" || !r.error),
       "dotnet backend should not error",
+    );
+  },
+);
+
+test(
+  "benchmark CLI includes a ps-list result when --compare is requested",
+  { skip: !getBinaryPath("dotnet") },
+  () => {
+    const result = run(["--runs", "1", "--warmup", "0", "--compare"]);
+    assert.strictEqual(result.status, 0, `expected success: ${result.stderr}`);
+    const payload = JSON.parse(result.stdout) as {
+      results: { id: string; error?: string }[];
+    };
+    assert.ok(
+      payload.results.some((r) => r.id === "ps-list"),
+      "expected a ps-list result",
     );
   },
 );
