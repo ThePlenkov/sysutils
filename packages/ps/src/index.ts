@@ -13,7 +13,8 @@ import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 
 let cachedDotnetAddon:
-  { PsModule: { listProcesses: (fields: string) => string } } | undefined;
+  | { path: string; addon: { PsModule: { listProcesses: (fields: string) => string } } }
+  | undefined;
 
 export interface ProcessInfo {
   pid: number;
@@ -250,13 +251,13 @@ export function createProcessStream(options?: PsOptions): ProcessStream {
 }
 
 function loadDotnetNodeapi(binaryPath: string): void {
-  if (cachedDotnetAddon) return;
+  if (cachedDotnetAddon && cachedDotnetAddon.path === binaryPath) return;
   const dotnet = require("node-api-dotnet/net8.0") as {
     require: (path: string) => {
       PsModule: { listProcesses: (fields: string) => string };
     };
   };
-  cachedDotnetAddon = dotnet.require(binaryPath);
+  cachedDotnetAddon = { path: binaryPath, addon: dotnet.require(binaryPath) };
 }
 
 function getNodeapiJson(
@@ -265,7 +266,7 @@ function getNodeapiJson(
 ): string {
   loadDotnetNodeapi(binaryPath);
   const fields = options?.fields?.join(",") ?? "";
-  return cachedDotnetAddon!.PsModule.listProcesses(fields);
+  return cachedDotnetAddon!.addon.PsModule.listProcesses(fields);
 }
 
 async function collectStream(stream: ProcessStream): Promise<ProcessInfo[]> {
