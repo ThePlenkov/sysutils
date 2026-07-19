@@ -29,6 +29,9 @@ on:
       - '.github/workflows/benchmark.yml'
       - 'packages/ps/scripts/benchmark.ts'
       - 'packages/ps/package.json'
+      - 'packages/ps/src/**/*.ts'
+      - 'packages/ps/binaries.json'
+      - 'packages/ps/native/**'
 
 env:
   BENCHMARK_RUNS: ${{ inputs.runs || '20' }}
@@ -112,7 +115,6 @@ jobs:
         with:
           path: benchmark-output
           merge-multiple: true
-          if-no-files-found: warn
 
       - name: Pick Linux badge as the main badge
         id: pick-badge
