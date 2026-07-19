@@ -335,5 +335,16 @@ async function collectStream(stream: ProcessStream): Promise<ProcessInfo[]> {
 export async function listProcesses(
   options?: PsOptions,
 ): Promise<ProcessInfo[]> {
-  return collectStream(createProcessStream(options));
+  const backend = resolveBackend(options);
+  if (backend !== "dotnet-nodeapi" || options?.backend === "dotnet-nodeapi") {
+    return collectStream(createProcessStream(options));
+  }
+
+  // Env-selected nodeapi may be missing or corrupt; fall back to the dotnet CLI
+  // (or the /proc backend on Linux) before giving up.
+  try {
+    return await collectStream(createProcessStream(options));
+  } catch {
+    return listProcesses({ ...options, backend: "dotnet" });
+  }
 }
