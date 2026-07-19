@@ -44,7 +44,8 @@ import { listProcesses, createProcessStream } from "@sysutils/ps";
 // Convenience collector when you need the full array
 const all = await listProcesses();
 
-// Or stream process objects and stop as soon as you find what you need
+// Or stream process objects and stop as soon as you find what you need;
+// destroy() also terminates the native backend process.
 const stream = createProcessStream({ fields: ["pid", "name"] });
 for await (const process of stream) {
   if (process.name === "node") {
@@ -65,8 +66,9 @@ collector helpers on top.
 
 ## Benchmark
 
-The benchmark workflow runs on demand and keeps an up-to-date SVG badge
-without touching this README:
+The Benchmark workflow runs on relevant pull requests and can be dispatched
+manually from `main` to publish an up-to-date SVG badge without touching this
+README:
 
 ![@sysutils/ps benchmark](https://ThePlenkov.github.io/sysutils/benchmark.svg)
 
