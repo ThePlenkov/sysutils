@@ -133,6 +133,16 @@ function normalizeProcessInfo(obj: Record<string, unknown>): ProcessInfo {
   return obj as ProcessInfo;
 }
 
+function pushJsonLine(stream: ProcessStream, line: string): void {
+  if (!line) return;
+  try {
+    const raw = JSON.parse(line) as Record<string, unknown>;
+    stream.push(normalizeProcessInfo(raw));
+  } catch (err) {
+    stream.emit("parseError", err instanceof Error ? err : new Error(String(err)));
+  }
+}
+
 function createNodeapiStream(
   options: PsOptions | undefined,
   binaryPath: string,
@@ -148,17 +158,7 @@ function createNodeapiStream(
     try {
       const json = getNodeapiJson(options, binaryPath);
       for (const line of json.split("\n")) {
-        if (!line) continue;
-        try {
-          stream.push(
-            normalizeProcessInfo(JSON.parse(line) as Record<string, unknown>),
-          );
-        } catch (err) {
-          stream.emit(
-            "parseError",
-            err instanceof Error ? err : new Error(String(err)),
-          );
-        }
+        pushJsonLine(stream, line);
       }
       stream.push(null);
     } catch (err) {
@@ -212,16 +212,7 @@ export function createProcessStream(options?: PsOptions): ProcessStream {
   stream.process = child;
 
   parser.on("line", (line) => {
-    if (!line) return;
-    try {
-      const raw = JSON.parse(line) as Record<string, unknown>;
-      stream.push(normalizeProcessInfo(raw));
-    } catch (err) {
-      stream.emit(
-        "parseError",
-        err instanceof Error ? err : new Error(String(err)),
-      );
-    }
+    pushJsonLine(stream, line);
   });
 
   parser.on("close", () => {
