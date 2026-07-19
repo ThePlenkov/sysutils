@@ -1,6 +1,6 @@
 {
   "name": "@sysutils/ps",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Fast, cross-platform process listing as a Node.js Readable stream.",
   "type": "module",
   "exports": {
