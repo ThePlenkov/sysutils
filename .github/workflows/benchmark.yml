@@ -29,7 +29,6 @@ on:
       - '.github/workflows/benchmark.yml'
       - 'packages/ps/scripts/benchmark.cjs'
       - 'packages/ps/package.json'
-      - 'packages/ps/src/index.ts'
 
 env:
   BENCHMARK_RUNS: ${{ inputs.runs || '20' }}
@@ -37,13 +36,13 @@ env:
   BENCHMARK_FIELDS: ${{ inputs.fields || 'pid,ppid,name' }}
   SYSUTILS_PS_BENCHMARK_COMPARE: ${{ inputs.compare-ps-list && '1' || '0' }}
 
-permissions:
-  contents: read
-
 jobs:
   benchmark:
     name: Benchmark (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      actions: write
     strategy:
       fail-fast: false
       matrix:
@@ -87,7 +86,7 @@ jobs:
           if [ "${{ env.SYSUTILS_PS_BENCHMARK_COMPARE }}" = "1" ]; then
             COMPARE_FLAG="--compare"
           fi
-          npm run benchmark -w packages/ps -- \
+          node packages/ps/scripts/benchmark.cjs \
             --runs ${{ env.BENCHMARK_RUNS }} \
             --warmup ${{ env.BENCHMARK_WARMUP }} \
             --fields ${{ env.BENCHMARK_FIELDS }} \
@@ -95,7 +94,6 @@ jobs:
             --svg benchmark-output/benchmark-${{ matrix.os }}.svg
 
       - name: Upload SVG artifact
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-${{ matrix.os }}
@@ -108,6 +106,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     steps:
       - name: Download all benchmark SVGs
         uses: actions/download-artifact@v4
@@ -121,7 +120,7 @@ jobs:
           cp benchmark-output/benchmark-ubuntu-latest.svg _site/benchmark.svg
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./_site

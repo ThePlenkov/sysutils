@@ -11,8 +11,8 @@ if (!fs.existsSync(distIndex)) {
   process.exit(1);
 }
 
-const runsArg = parseInt(getArg('--runs') ?? process.env.SYSUTILS_PS_BENCHMARK_RUNS ?? '50', 10);
-const warmupArg = parseInt(getArg('--warmup') ?? process.env.SYSUTILS_PS_BENCHMARK_WARMUP ?? '3', 10);
+const runsArg = Number.parseInt(getArg('--runs') ?? process.env.SYSUTILS_PS_BENCHMARK_RUNS ?? '50', 10);
+const warmupArg = Number.parseInt(getArg('--warmup') ?? process.env.SYSUTILS_PS_BENCHMARK_WARMUP ?? '3', 10);
 const fieldsArg = getArg('--fields') ?? 'pid,ppid,name';
 const summaryFile = getArg('--summary') ?? process.env.GITHUB_STEP_SUMMARY;
 const svgFile = getArg('--svg') ?? process.env.SYSUTILS_PS_BENCHMARK_SVG;
@@ -25,6 +25,10 @@ function getArg(name) {
 
 function hasArg(name) {
   return process.argv.includes(name);
+}
+
+function parseFields(raw) {
+  return raw.split(',').map((s) => s.trim()).filter(Boolean);
 }
 
 function percentile(sorted, p) {
@@ -42,7 +46,7 @@ function stats(times) {
     n: sorted.length,
     mean: sum / sorted.length,
     min: sorted[0],
-    max: sorted[sorted.length - 1],
+    max: sorted.at(-1),
     p50: percentile(sorted, 50),
     p95: percentile(sorted, 95),
     p99: percentile(sorted, 99),
@@ -76,14 +80,18 @@ async function runOne(fn, iterations, warmups) {
   return { times, result, error };
 }
 
-async function main() {
-  const { listProcesses, getBinaryPath } = await import(pathToFileURL(distIndex).href);
+function buildMeta(fields) {
+  return {
+    node: process.version,
+    rid: `${process.platform}-${process.arch}`,
+    fields,
+    runs: runsArg,
+    warmup: warmupArg,
+    date: new Date().toISOString(),
+  };
+}
 
-  const fields = fieldsArg
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-
+async function resolveBackends(listProcesses, getBinaryPath, fields) {
   const backends = [];
 
   if (getBinaryPath('dotnet')) {
@@ -103,31 +111,71 @@ async function main() {
   }
 
   if (compare) {
-    try {
-      const mod = await import('ps-list');
-      const psList = mod.default ?? mod;
-      if (typeof psList !== 'function') {
-        throw new Error('ps-list did not export a callable function');
-      }
+    await maybeAddPsListBackend(backends);
+  }
+
+  return backends;
+}
+
+async function maybeAddPsListBackend(backends) {
+  try {
+    const mod = await import('ps-list');
+    const psList = mod.default ?? mod;
+    if (typeof psList !== 'function') {
+      throw new TypeError('ps-list did not export a callable function');
+    }
+    backends.push({
+      name: 'ps-list',
+      id: 'ps-list',
+      fn: psList,
+    });
+  } catch (e) {
+    console.warn(`ps-list comparison unavailable: ${e.message}`);
+    if (hasArg('--compare')) {
       backends.push({
         name: 'ps-list',
         id: 'ps-list',
-        fn: psList,
+        fn: () => {
+          throw e;
+        },
       });
-    } catch (e) {
-      console.warn(`ps-list comparison unavailable: ${e.message}`);
-      if (hasArg('--compare')) {
-        // When explicitly requested, surface the failure as a result row.
-        backends.push({
-          name: 'ps-list',
-          id: 'ps-list',
-          fn: () => {
-            throw e;
-          },
-        });
-      }
     }
   }
+}
+
+async function runBenchmarks(backends, runs, warmup) {
+  const results = [];
+  for (const backend of backends) {
+    process.stderr.write(`Benchmarking ${backend.name} (${runs} runs, ${warmup} warmup)... `);
+    const { times, result, error } = await runOne(backend.fn, runs, warmup);
+    if (error) {
+      process.stderr.write(`failed: ${error.message}\n`);
+      results.push({ ...backend, error: error.message });
+      continue;
+    }
+    process.stderr.write(`done\n`);
+    const s = stats(times);
+    results.push({ ...backend, stats: s, count: Array.isArray(result) ? result.length : 'n/a' });
+  }
+  return results;
+}
+
+function writeOutputs(meta, results) {
+  if (summaryFile) {
+    fs.mkdirSync(path.dirname(summaryFile), { recursive: true });
+    fs.appendFileSync(summaryFile, renderHtml(meta, results));
+  }
+
+  if (svgFile) {
+    fs.mkdirSync(path.dirname(svgFile), { recursive: true });
+    fs.writeFileSync(svgFile, renderSvg(meta, results), 'utf8');
+  }
+}
+
+async function main() {
+  const { listProcesses, getBinaryPath } = await import(pathToFileURL(distIndex).href);
+  const fields = parseFields(fieldsArg);
+  const backends = await resolveBackends(listProcesses, getBinaryPath, fields);
 
   if (backends.length === 0) {
     console.error(
@@ -136,60 +184,17 @@ async function main() {
     process.exit(1);
   }
 
-  const results = [];
-  for (const backend of backends) {
-    process.stderr.write(`Benchmarking ${backend.name} (${runsArg} runs, ${warmupArg} warmup)... `);
-    const { times, result, error } = await runOne(backend.fn, runsArg, warmupArg);
-    if (error) {
-      process.stderr.write(`failed: ${error.message}\n`);
-      results.push({ ...backend, error: error.message });
-      continue;
-    }
-    process.stderr.write(`done\n`);
-    const s = stats(times);
-    const count = Array.isArray(result) ? result.length : 'n/a';
-    results.push({ ...backend, stats: s, count });
-  }
-
-  const meta = {
-    node: process.version,
-    dotnet: tryGetDotnetVersion(),
-    rid: `${process.platform}-${process.arch}`,
-    fields,
-    runs: runsArg,
-    warmup: warmupArg,
-    date: new Date().toISOString(),
-  };
-
+  const results = await runBenchmarks(backends, runsArg, warmupArg);
+  const meta = buildMeta(fields);
   const payload = { meta, results };
-  const html = renderHtml(meta, results);
-  const svg = renderSvg(meta, results);
 
-  if (summaryFile) {
-    fs.appendFileSync(summaryFile, html);
-  }
-
-  if (svgFile) {
-    fs.writeFileSync(svgFile, svg, 'utf8');
-  }
+  writeOutputs(meta, results);
 
   // Write JSON to stdout and exit explicitly. Forcing exit avoids the
   // node-api-dotnet shutdown hang that can occur in some Node.js versions.
   process.stdout.write(JSON.stringify(payload, null, 2) + '\n', () => {
     process.exit(0);
   });
-}
-
-function tryGetDotnetVersion() {
-  try {
-    const { execSync } = require('node:child_process');
-    return execSync('dotnet --version', {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    return 'unknown';
-  }
 }
 
 function renderHtml(meta, results) {
@@ -215,7 +220,6 @@ function renderHtml(meta, results) {
 <h2>@sysutils/ps benchmark — ${escapeHtml(meta.rid)}</h2>
 <p>
   <strong>Node.js:</strong> ${escapeHtml(meta.node)}<br>
-  <strong>.NET SDK:</strong> ${escapeHtml(meta.dotnet)}<br>
   <strong>Fields:</strong> ${escapeHtml(meta.fields.join(','))}<br>
   <strong>Iterations:</strong> ${meta.runs}<br>
   <strong>Warmup:</strong> ${meta.warmup}<br>
@@ -260,7 +264,7 @@ function renderSvg(meta, results) {
     .join('');
 
   const title = `${meta.rid} — ${meta.fields.join(',')} — ${meta.runs} runs`;
-  const subtitle = `${meta.node} / .NET ${meta.dotnet} / ${meta.date.slice(0, 19).replace('T', ' ')}`;
+  const subtitle = `${meta.node} / ${meta.date.slice(0, 19).replaceAll('T', ' ')}`;
 
   const rows = results
     .map((r, i) => {
@@ -294,17 +298,20 @@ function renderSvg(meta, results) {
 </svg>`;
 }
 
-function escapeXml(s) {
+function escapeHtml(s) {
   return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function escapeXml(s) {
+  return String(s)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
 }
 
 function format(ms) {
