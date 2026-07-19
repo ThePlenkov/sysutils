@@ -10,13 +10,13 @@ jobs:
   node:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 24
-      - uses: actions/setup-dotnet@v4
+          node-version: lts/*
+      - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.x"
       - run: npm install
       - run: npm run build:cli -w packages/ps
       - run: npm run build:nodeapi -w packages/ps
@@ -35,12 +35,12 @@ jobs:
         rid: [win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 24
-      - uses: actions/setup-dotnet@v4
+          node-version: lts/*
+      - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.x"
       - run: node packages/ps/scripts/build-native-all.ts cli ${{ matrix.rid }}
       - run: node packages/ps/scripts/build-native-all.ts nodeapi ${{ matrix.rid }}
