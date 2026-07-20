@@ -548,6 +548,17 @@ internal static class WindowsReader
         }
     }
 
+    private static (int uid, string? user) GetProcessOwner(ProcessFields fields, int pid)
+    {
+        if ((fields & ProcessFields.User) != 0 || (fields & ProcessFields.Uid) != 0)
+        {
+            TryGetProcessOwner(pid, out var uid, out var user);
+            return (uid, user);
+        }
+
+        return (-1, null);
+    }
+
     private static void WriteProcess(TextWriter writer, ProcessFields fields, SystemProcessInformation p)
     {
         var pid = p.UniqueProcessId.ToInt32();
@@ -565,13 +576,7 @@ internal static class WindowsReader
             startTime = DateTime.FromFileTimeUtc(p.CreateTime).ToString("o");
         }
 
-        var wantsUser = (fields & ProcessFields.User) != 0 || (fields & ProcessFields.Uid) != 0;
-        var uid = -1;
-        string? user = null;
-        if (wantsUser)
-        {
-            TryGetProcessOwner(pid, out uid, out user);
-        }
+        var (uid, user) = GetProcessOwner(fields, pid);
 
         NativeHelpers.WriteProcessInfo(writer, fields, new ProcessInfo
         {
