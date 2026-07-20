@@ -7,6 +7,5 @@ engines:
     exclude_paths:
       - "packages/ps/src/**"
   opengrep:
-    enabled: true
-    disable_rules:
-      - "codacy.csharp.security.null-dereference"
+    exclude_paths:
+      - "packages/ps/native/Program.cs"
