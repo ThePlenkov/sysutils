@@ -355,6 +355,6 @@ export async function listProcesses(
   try {
     return await collectStream(createProcessStream(options));
   } catch {
-    return listProcesses({ ...options, backend: "dotnet" });
+    return listProcesses({ ...options, backend: "auto" });
   }
 }
