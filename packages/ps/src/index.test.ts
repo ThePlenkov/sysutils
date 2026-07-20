@@ -41,6 +41,18 @@ test("createProcessStream works when a backend binary is available", async (t) =
   );
 });
 
+function assertProcessInfoFields(info: {
+  pid: number;
+  startTime?: Date | null;
+  uid?: number | null;
+  user?: string | null;
+}) {
+  assert.strictEqual(typeof info.pid, "number");
+  assert.ok(info.startTime instanceof Date || info.startTime === null);
+  assert.ok(typeof info.uid === "number" || info.uid === null);
+  assert.ok(typeof info.user === "string" || info.user === null);
+}
+
 test("dotnet backend exposes startTime, uid, and user when fields are requested", async (t) => {
   if (!getBinaryPath("dotnet")) {
     t.skip("dotnet CLI binary not built");
@@ -52,11 +64,7 @@ test("dotnet backend exposes startTime, uid, and user when fields are requested"
     fields: ["pid", "startTime", "uid", "user"],
   });
   assert.ok(procs.length > 0);
-  const first = procs[0];
-  assert.strictEqual(typeof first.pid, "number");
-  assert.ok(first.startTime instanceof Date || first.startTime === null);
-  assert.ok(typeof first.uid === "number" || first.uid === null);
-  assert.ok(typeof first.user === "string" || first.user === null);
+  assertProcessInfoFields(procs[0]);
 });
 
 test(
@@ -105,11 +113,7 @@ test(
       fields: ["pid", "startTime", "uid", "user"],
     });
     assert.ok(procs.length > 0);
-    const first = procs[0];
-    assert.strictEqual(typeof first.pid, "number");
-    assert.ok(first.startTime instanceof Date || first.startTime === null);
-    assert.ok(typeof first.uid === "number" || first.uid === null);
-    assert.ok(typeof first.user === "string" || first.user === null);
+    assertProcessInfoFields(procs[0]);
   },
 );
 

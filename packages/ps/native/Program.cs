@@ -686,7 +686,7 @@ internal static class WindowsReader
             {
                 if (LookupAccountSid(null, sid, nameBuf, ref nameLen, domainBuf, ref domainLen, out _))
                 {
-                    return Marshal.PtrToStringUni(nameBuf, nameLen);
+                    return Marshal.PtrToStringUni(nameBuf);
                 }
 
                 if (Marshal.GetLastWin32Error() != 122) // ERROR_INSUFFICIENT_BUFFER
@@ -1302,13 +1302,24 @@ internal static class LinuxReader
         return string.IsNullOrEmpty(s) ? null : s;
     }
 
-    private struct StatInfo
+    private struct StatInfo : IEquatable<StatInfo>
     {
         public int Ppid;
         public long Utime;
         public long Stime;
         public long StartTime;
         public long Rss;
+
+        public bool Equals(StatInfo other) =>
+            Ppid == other.Ppid &&
+            Utime == other.Utime &&
+            Stime == other.Stime &&
+            StartTime == other.StartTime &&
+            Rss == other.Rss;
+
+        public override bool Equals(object? obj) => obj is StatInfo other && Equals(other);
+
+        public override int GetHashCode() => HashCode.Combine(Ppid, Utime, Stime, StartTime, Rss);
     }
 }
 
