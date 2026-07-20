@@ -10,17 +10,15 @@ import { createProcStream, procBackendAvailable } from "./proc.js";
 import {
   normalizeProcessInfo,
   toBackendFields,
-  toProcessRow,
   type ProcessInfo,
-  type ProcessRow,
-  type PsOptions,
   type ProcessStream,
+  type PsOptions,
 } from "./types.js";
 
 const require = createRequire(import.meta.url);
 
-export type { ProcessInfo, ProcessRow, PsOptions, ProcessStream };
-export { toProcessRow };
+export { toProcessRow } from "./types.js";
+export type { ProcessInfo, ProcessRow, PsOptions, ProcessStream } from "./types.js";
 
 let cachedDotnetAddon:
   | {

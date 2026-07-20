@@ -46,39 +46,36 @@ interface ProcRead {
 let clockTicksCache: number | undefined;
 let pageSizeCache: number | undefined;
 
-function getClockTicks(): number {
-  if (clockTicksCache !== undefined) return clockTicksCache;
-  try {
-    const out = spawnSync("getconf", ["CLK_TCK"], {
-      encoding: "utf8",
-    }).stdout.trim();
-    const n = Number(out);
-    if (n > 0) {
-      clockTicksCache = n;
-      return n;
+const GETCONF_PATHS = ["/usr/bin/getconf", "/bin/getconf"];
+
+function getGetconfValue(name: string): number | undefined {
+  for (const bin of GETCONF_PATHS) {
+    if (!existsSync(bin)) continue;
+    try {
+      const out = spawnSync(bin, [name], {
+        encoding: "utf8",
+        env: {},
+      }).stdout.trim();
+      const n = Number(out);
+      if (n > 0) return n;
+    } catch {
+      // fall through to the next candidate
     }
-  } catch {
-    // fall through to default
   }
-  clockTicksCache = 100;
+  return undefined;
+}
+
+function getClockTicks(): number {
+  if (clockTicksCache === undefined) {
+    clockTicksCache = getGetconfValue("CLK_TCK") ?? 100;
+  }
   return clockTicksCache;
 }
 
 function getPageSize(): number {
-  if (pageSizeCache !== undefined) return pageSizeCache;
-  try {
-    const out = spawnSync("getconf", ["PAGESIZE"], {
-      encoding: "utf8",
-    }).stdout.trim();
-    const n = Number(out);
-    if (n > 0) {
-      pageSizeCache = n;
-      return n;
-    }
-  } catch {
-    // fall through to default
+  if (pageSizeCache === undefined) {
+    pageSizeCache = getGetconfValue("PAGESIZE") ?? 4096;
   }
-  pageSizeCache = 4096;
   return pageSizeCache;
 }
 
@@ -94,8 +91,9 @@ function readExeLink(dir: string): string | null {
   try {
     const target = readlinkSync(`${dir}/exe`);
     let s = target.toString();
-    if (s.endsWith(" (deleted)")) {
-      s = s.slice(0, -" (deleted)".length);
+    const deleted = " (deleted)";
+    if (s.endsWith(deleted)) {
+      s = s.slice(0, -deleted.length);
     }
     return s || null;
   } catch {
@@ -179,7 +177,7 @@ function parseStat(data: Buffer): ProcStat | undefined {
 }
 
 function decodeCmdline(data: Buffer): string | null {
-  const s = data.toString("utf8").replace(/\0/g, " ").trim();
+  const s = data.toString("utf8").replaceAll("\0", " ").trim();
   return s.length ? s : null;
 }
 
@@ -187,21 +185,11 @@ function decodeComm(data: Buffer): string {
   return data.toString("utf8").trim();
 }
 
-function readOneProcess(
+function readProcessNameAndPath(
   dir: string,
-  pid: number,
-  wants: Record<string, boolean>,
-  sys: SystemInfo,
-): ProcRead {
-  const wantsName = wants.name || wants.cmd;
-  const wantsPath = wants.path;
-  const wantsCmd = wants.cmd;
-  const wantsUid = wants.uid;
-  const wantsPpid = wants.ppid;
-  const wantsMemory = wants.memory;
-  const wantsCpu = wants.cpu;
-  const wantsStartTime = wants.startTime;
-
+  wantsName: boolean,
+  wantsPath: boolean,
+): { name: string; path: string | null } {
   let path: string | null = null;
   let name = "";
 
@@ -218,47 +206,72 @@ function readOneProcess(
     if (!name) name = "";
   }
 
-  let cmd: string | null = null;
-  if (wantsCmd) {
-    const cmdline = readProcFile(dir, "cmdline");
-    cmd = cmdline ? decodeCmdline(cmdline) : null;
-  }
+  return { name, path };
+}
 
-  let uid: number | null = null;
-  if (wantsUid) {
-    const status = readProcFile(dir, "status");
-    uid = status ? parseStatusUid(status) : null;
-  }
+function readProcessCmd(dir: string): string | null {
+  const cmdline = readProcFile(dir, "cmdline");
+  return cmdline ? decodeCmdline(cmdline) : null;
+}
 
-  let stat: ProcStat | undefined;
-  if (wantsPpid || wantsMemory || wantsCpu || wantsStartTime) {
-    const statBytes = readProcFile(dir, "stat");
-    stat = statBytes ? parseStat(statBytes) : undefined;
-  }
+function readProcessUid(dir: string): number | null {
+  const status = readProcFile(dir, "status");
+  return status ? parseStatusUid(status) : null;
+}
 
+function readProcessStat(dir: string): ProcStat | undefined {
+  const statBytes = readProcFile(dir, "stat");
+  return statBytes ? parseStat(statBytes) : undefined;
+}
+
+function computeStartTime(
+  stat: ProcStat | undefined,
+  sys: SystemInfo,
+  wants: boolean,
+): number | null {
+  if (!stat || !wants) return null;
+  const epoch = sys.bootTime + stat.startTime / sys.ticks;
+  return Number.isFinite(epoch) ? epoch : null;
+}
+
+function computeMemory(
+  stat: ProcStat | undefined,
+  sys: SystemInfo,
+  wants: boolean,
+): number | null {
+  if (!stat || !wants) return null;
+  const value = ((stat.rss * sys.pageSize) / sys.totalMem) * 100.0;
+  return Number.isFinite(value) ? value : null;
+}
+
+function computeCpu(
+  stat: ProcStat | undefined,
+  sys: SystemInfo,
+  wants: boolean,
+): number | null {
+  if (!stat || !wants) return null;
+  const processAge = sys.uptime - stat.startTime / sys.ticks;
+  if (processAge <= 0) return null;
+  const totalTime = (stat.utime + stat.stime) / sys.ticks;
+  const value = (totalTime / processAge) * 100.0;
+  return Number.isFinite(value) ? value : null;
+}
+
+function readOneProcess(
+  dir: string,
+  pid: number,
+  wants: Record<string, boolean>,
+  sys: SystemInfo,
+): ProcRead {
+  const { name, path } = readProcessNameAndPath(dir, wants.name, wants.path);
+  const cmd = wants.cmd ? readProcessCmd(dir) : null;
+  const uid = wants.uid ? readProcessUid(dir) : null;
+  const wantsStat = wants.ppid || wants.memory || wants.cpu || wants.startTime;
+  const stat = wantsStat ? readProcessStat(dir) : undefined;
   const ppid = stat ? stat.ppid : 0;
-
-  let startTime: number | null = null;
-  if (stat && wantsStartTime) {
-    const epoch = sys.bootTime + stat.startTime / sys.ticks;
-    startTime = Number.isFinite(epoch) ? epoch : null;
-  }
-
-  let memory: number | null = null;
-  if (stat && wantsMemory) {
-    const value = ((stat.rss * sys.pageSize) / sys.totalMem) * 100.0;
-    memory = Number.isFinite(value) ? value : null;
-  }
-
-  let cpu: number | null = null;
-  if (stat && wantsCpu) {
-    const processAge = sys.uptime - stat.startTime / sys.ticks;
-    if (processAge > 0) {
-      const totalTime = (stat.utime + stat.stime) / sys.ticks;
-      const value = (totalTime / processAge) * 100.0;
-      cpu = Number.isFinite(value) ? value : null;
-    }
-  }
+  const startTime = computeStartTime(stat, sys, wants.startTime);
+  const memory = computeMemory(stat, sys, wants.memory);
+  const cpu = computeCpu(stat, sys, wants.cpu);
 
   return { pid, ppid, uid, name, cmd, path, startTime, memory, cpu };
 }
@@ -281,6 +294,7 @@ function buildWants(requestedFields?: string[]): Record<string, boolean> {
   for (const f of backendFields ?? ALL_BACKEND_FIELDS) {
     wants[f] = true;
   }
+  if (wants.cmd) wants.name = true;
   return wants;
 }
 

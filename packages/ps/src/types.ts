@@ -62,103 +62,118 @@ export function toBackendFields(fields?: string[]): string[] | undefined {
   return out;
 }
 
+function toNumberOrNull(value: unknown): number | null {
+  return typeof value === "number" ? value : null;
+}
+
+function toStringOrNull(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function toDateOrNull(value: unknown): Date | null {
+  if (value instanceof Date) return value;
+  if (typeof value === "string") {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+interface BaseProcess {
+  pid: number;
+  ppid: number;
+  name: string;
+  uid: number | null;
+  user: string | null;
+  cmd: string | null;
+  command: string | null;
+  path: string | null;
+  startTime: Date | null;
+  startedAt: number | null;
+  cpu: number | null;
+  memory: number | null;
+}
+
+function getCommand(cmd: string | null, name: string): string | null {
+  if (cmd && cmd.length > 0) return cmd;
+  if (name.length > 0) return name;
+  return null;
+}
+
+function getUser(uid: number | null): string | null {
+  if (uid !== null && uid >= 0) return String(uid);
+  return null;
+}
+
+function buildBaseProcess(raw: Record<string, unknown>): BaseProcess {
+  const pid = typeof raw.pid === "number" ? raw.pid : Number(raw.pid);
+  const ppid = typeof raw.ppid === "number" ? raw.ppid : Number(raw.ppid);
+  const name = toStringOrNull(raw.name) ?? "";
+  const uid = toNumberOrNull(raw.uid);
+  const cmd = toStringOrNull(raw.cmd);
+  const path = toStringOrNull(raw.path);
+  const memory = toNumberOrNull(raw.memory);
+  const cpu = toNumberOrNull(raw.cpu);
+  const startTime = toDateOrNull(raw.startTime);
+  const command = getCommand(cmd, name);
+  const startedAt = startTime ? startTime.getTime() : null;
+  const user = getUser(uid);
+
+  return {
+    pid,
+    ppid,
+    name,
+    uid,
+    user,
+    cmd,
+    command,
+    path,
+    startTime,
+    startedAt,
+    cpu,
+    memory,
+  };
+}
+
 export function normalizeProcessInfo(
   raw: Record<string, unknown>,
   requestedFields?: string[],
 ): ProcessInfo {
-  const pid = typeof raw.pid === "number" ? raw.pid : Number(raw.pid);
-  const ppid = typeof raw.ppid === "number" ? raw.ppid : Number(raw.ppid);
-  const name = typeof raw.name === "string" ? raw.name : "";
-
-  const uid =
-    typeof raw.uid === "number" ? raw.uid : raw.uid === null ? null : null;
-
-  const cmd =
-    typeof raw.cmd === "string" ? raw.cmd : raw.cmd === null ? null : null;
-
-  const path =
-    typeof raw.path === "string" ? raw.path : raw.path === null ? null : null;
-
-  const memory =
-    typeof raw.memory === "number"
-      ? raw.memory
-      : raw.memory === null
-        ? null
-        : null;
-
-  const cpu =
-    typeof raw.cpu === "number" ? raw.cpu : raw.cpu === null ? null : null;
-
-  let startTime: Date | null = null;
-  if (typeof raw.startTime === "string") {
-    const d = new Date(raw.startTime);
-    if (!Number.isNaN(d.getTime())) startTime = d;
-  } else if (raw.startTime instanceof Date) {
-    startTime = raw.startTime;
-  } else if (raw.startTime === null) {
-    startTime = null;
-  }
-
-  const command = (cmd && cmd.length > 0 ? cmd : name) || null;
-  const startedAt = startTime ? startTime.getTime() : null;
-  const user = typeof uid === "number" && uid >= 0 ? String(uid) : null;
+  const base = buildBaseProcess(raw);
 
   if (!requestedFields || requestedFields.length === 0) {
-    return {
-      pid,
-      ppid,
-      name,
-      uid,
-      user,
-      cmd,
-      command,
-      path,
-      startTime,
-      startedAt,
-      cpu,
-      memory,
-    };
+    return base as ProcessInfo;
   }
 
+  const fieldValues: Record<string, unknown> = { ...base };
   const result: Record<string, unknown> = {};
   for (const f of requestedFields) {
-    if (f === "pid") result.pid = pid;
-    else if (f === "ppid") result.ppid = ppid;
-    else if (f === "name") result.name = name;
-    else if (f === "uid") result.uid = uid;
-    else if (f === "user") result.user = user;
-    else if (f === "cmd") result.cmd = cmd;
-    else if (f === "command") result.command = command;
-    else if (f === "path") result.path = path;
-    else if (f === "startTime") result.startTime = startTime;
-    else if (f === "startedAt") result.startedAt = startedAt;
-    else if (f === "cpu") result.cpu = cpu;
-    else if (f === "memory") result.memory = memory;
-    else result[f] = null;
+    result[f] = fieldValues[f] ?? null;
   }
   return result as ProcessInfo;
 }
 
+function deriveCommand(info: ProcessInfo): string | null {
+  const value = info.command || info.cmd || info.name;
+  if (typeof value === "string" && value.length > 0) return value;
+  return null;
+}
+
+function deriveUser(info: ProcessInfo): string | null {
+  if (typeof info.user === "string" && info.user.length > 0) return info.user;
+  if (typeof info.uid === "number" && info.uid >= 0) return String(info.uid);
+  return null;
+}
+
+function deriveStartedAt(info: ProcessInfo): number | null {
+  if (typeof info.startedAt === "number") return info.startedAt;
+  if (info.startTime instanceof Date) return info.startTime.getTime();
+  return null;
+}
+
 export function toProcessRow(info: ProcessInfo): ProcessRow {
-  const cmdOrName = info.command || info.cmd || info.name;
-  const command =
-    typeof cmdOrName === "string" && cmdOrName.length > 0 ? cmdOrName : null;
-
-  const uid = typeof info.uid === "number" ? info.uid : null;
-  const user =
-    typeof info.user === "string"
-      ? info.user
-      : uid !== null
-        ? String(uid)
-        : null;
-
-  const start = info.startTime instanceof Date ? info.startTime : null;
-  const startedAt =
-    typeof info.startedAt === "number"
-      ? info.startedAt
-      : start
-        ? start.getTime()
-        : null;
-
+  const command = deriveCommand(info);
+  const user = deriveUser(info);
+  const startedAt = deriveStartedAt(info);
   return { ...info, command, user, startedAt } as ProcessRow;
 }
