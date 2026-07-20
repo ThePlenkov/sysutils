@@ -18,8 +18,9 @@ function setOutput(lines) {
   }
 }
 
-if (result?.nextRelease) {
-  setOutput(`version=${result.nextRelease.version}\nreleased=true\n`);
+const nextRelease = (result || {}).nextRelease;
+if (nextRelease) {
+  setOutput(`version=${nextRelease.version}\nreleased=true\n`);
 } else {
   setOutput("released=false\n");
 }

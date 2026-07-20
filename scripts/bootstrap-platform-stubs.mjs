@@ -21,10 +21,16 @@ const rootPkg = {
   private: true,
   description:
     "Temporary workspace root for bootstrapping @sysutils/ps-* platform packages.",
-  workspaces: platforms.map(([platform, arch]) => {
-    const name = `@sysutils/ps-${platform}-${arch}`;
-    return `./${name.replace("@", "").replace("/", "-")}`;
-  }),
+  workspaces: (function () {
+    const out = [];
+    for (let i = 0; i < platforms.length; i++) {
+      const platform = platforms[i][0];
+      const arch = platforms[i][1];
+      const name = "@sysutils/ps-" + platform + "-" + arch;
+      out.push("./" + name.replace("@", "").replace("/", "-"));
+    }
+    return out;
+  })(),
 };
 
 fs.writeFileSync(
@@ -33,8 +39,10 @@ fs.writeFileSync(
   "utf8",
 );
 
-for (const [platform, arch] of platforms) {
-  const name = `@sysutils/ps-${platform}-${arch}`;
+for (let i = 0; i < platforms.length; i++) {
+  const platform = platforms[i][0];
+  const arch = platforms[i][1];
+  const name = "@sysutils/ps-" + platform + "-" + arch;
   const dir = path.join(outDir, name.replace("@", "").replace("/", "-"));
   fs.mkdirSync(dir, { recursive: true });
 

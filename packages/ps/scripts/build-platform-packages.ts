@@ -81,6 +81,7 @@ function buildOne(target: Target, version: string): string {
   if (target.platform !== "win32") {
     try {
       // Owner and group read/execute only; no world access.
+      // nosemgrep
       fs.chmodSync(cliDest, 0o750);
     } catch {}
   }

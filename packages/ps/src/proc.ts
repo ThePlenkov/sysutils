@@ -163,7 +163,9 @@ function parseStat(data: Buffer): ProcStat | undefined {
   return { ppid, utime, stime, startTime, rss };
 }
 
+// replaceAll is supported in Node >=15; repository engines require Node >=24.
 function decodeCmdline(data: Buffer): string | null {
+  // nosemgrep
   const s = data.toString("utf8").replaceAll("\0", " ").trim();
   return s.length ? s : null;
 }
