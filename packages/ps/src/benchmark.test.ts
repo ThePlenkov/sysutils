@@ -141,7 +141,7 @@ test(
 
 test(
   "benchmark CLI writes a chart SVG",
-  { skip: !getBinaryPath("dotnet") },
+  { skip: !getBinaryPath("dotnet") && !getBinaryPath("dotnet-nodeapi") },
   () => {
     const svgUrl = new URL("../tmp/bench-chart.svg", import.meta.url);
     const result = run([
@@ -160,6 +160,6 @@ test(
     assert.ok(svg.includes("Mean"), "expected Mean legend label");
     assert.ok(svg.includes("P95"), "expected P95 legend label");
     assert.ok(svg.includes("P99"), "expected P99 legend label");
-    assert.ok(svg.includes("<rect"), "expected at least one bar");
+    assert.ok(svg.includes("fill='#2563eb'"), "expected at least one Mean bar");
   },
 );

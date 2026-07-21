@@ -454,6 +454,16 @@ ${compareNote}
 
 function renderSvg(meta: Meta, results: Result[]): string {
   const width = 800;
+
+  if (results.length === 0) {
+    // nosemgrep
+    return `<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns='http://www.w3.org/2000/svg' width='${width}' height='200' viewBox='0 0 ${width} 200'>
+  <rect width='${width}' height='200' fill='#ffffff' stroke='#e5e7eb' stroke-width='1' rx='8' />
+  <text x='${width / 2}' y='100' text-anchor='middle' font-size='14' fill='#6b7280'>No results to display</text>
+</svg>`;
+  }
+
   const margin = { top: 80, right: 120, bottom: 48, left: 230 };
   const chartWidth = width - margin.left - margin.right;
   const groupHeight = 70;
@@ -515,9 +525,12 @@ function renderSvg(meta: Meta, results: Result[]): string {
   <text x='${x + 18}' y='${legendY + 10}' font-size='12' fill='#4b5563'>${m.label}</text>`;
   }
 
-  for (let i = 0; i < tickCount; i++) {
+  const tickValues = Array.from({ length: tickCount }, (_, i) => {
     const value = i * tickStep;
-    const x = xScale(value);
+    return { value, x: xScale(value) };
+  });
+
+  for (const { x } of tickValues) {
     // nosemgrep
     svg += `
   <line x1='${x}' y1='${margin.top}' x2='${x}' y2='${margin.top + chartHeight}' stroke='#f3f4f6' stroke-width='1' />`;
@@ -528,12 +541,10 @@ function renderSvg(meta: Meta, results: Result[]): string {
   <line x1='${margin.left}' y1='${margin.top}' x2='${margin.left}' y2='${margin.top + chartHeight}' stroke='#d1d5db' stroke-width='1' />
   <line x1='${margin.left}' y1='${margin.top + chartHeight}' x2='${margin.left + chartWidth}' y2='${margin.top + chartHeight}' stroke='#d1d5db' stroke-width='1' />`;
 
-  for (let i = 0; i < tickCount; i++) {
-    const value = i * tickStep;
-    const x = xScale(value);
+  for (const { value, x } of tickValues) {
     // nosemgrep
     svg += `
-  <text x='${x}' y='${margin.top + chartHeight + 18}' text-anchor='middle' font-size='11' fill='#9ca3af'>${formatAxis(value)}</text>`;
+  <text x='${x}' y='${margin.top + chartHeight + 18}' text-anchor='middle' font-size='11' fill='#9ca3af'>${formatAxis(value)} ms</text>`;
   }
 
   for (let i = 0; i < results.length; i++) {
@@ -556,9 +567,10 @@ function renderSvg(meta: Meta, results: Result[]): string {
     const count = r.count ?? 'n/a';
     // nosemgrep
     svg += `
-  <text x='${margin.left - 12}' y='${labelY + 14}' text-anchor='end' font-size='10' fill='#9ca3af'>(${count})</text>`;
+  <text x='${margin.left - 12}' y='${labelY + 14}' text-anchor='end' font-size='10' fill='#9ca3af'>Processes: ${count}</text>`;
 
-    const s = r.stats!;
+    const s = r.stats;
+    if (!s) continue;
     const barsTotal = metrics.length * barHeight + (metrics.length - 1) * barGap;
     const barTop = y + (groupHeight - barsTotal) / 2;
 

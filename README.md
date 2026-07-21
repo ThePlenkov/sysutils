@@ -76,7 +76,6 @@ README:
 
 > The badge is published to the `gh-pages` branch by the `Benchmark` workflow.
 
-
 ## Design
 
 Each utility follows the same contract:
