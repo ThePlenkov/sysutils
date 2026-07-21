@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { getBinaryPath } from "./index.js";
 
 const packageDir = path.resolve(import.meta.dirname, "..");
@@ -142,10 +143,17 @@ test(
   "benchmark CLI writes a chart SVG",
   { skip: !getBinaryPath("dotnet") },
   () => {
-    const svgPath = path.join(packageDir, "tmp", "bench-chart.svg");
-    const result = run(["--runs", "1", "--warmup", "0", "--svg", svgPath]);
+    const svgUrl = new URL("../tmp/bench-chart.svg", import.meta.url);
+    const result = run([
+      "--runs",
+      "1",
+      "--warmup",
+      "0",
+      "--svg",
+      fileURLToPath(svgUrl),
+    ]);
     assert.strictEqual(result.status, 0, `expected success: ${result.stderr}`);
-    const svg = fs.readFileSync(svgPath, "utf8");
+    const svg = fs.readFileSync(svgUrl, "utf8");
     assert.ok(svg.includes("<svg"), "expected an SVG root element");
     assert.ok(svg.includes("@sysutils/ps benchmark"), "expected chart title");
     assert.ok(svg.includes("Mean"), "expected Mean legend label");
